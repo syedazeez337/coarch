@@ -2,6 +2,7 @@
 
 import sys
 import os
+
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 print("=" * 60)
@@ -13,7 +14,7 @@ print("\n[1/4] Creating index and sample data...")
 import numpy as np
 import faiss
 from backend.indexer import RepositoryIndexer, CodeChunk
-from backend.ast_analyzer import TreeSitterAnalyzer, StructuralInfo
+from backend.ast_analyzer import TreeSitterAnalyzer
 
 indexer = RepositoryIndexer(db_path=":memory:")
 analyzer = TreeSitterAnalyzer()
@@ -31,13 +32,13 @@ sample_chunks = [
     return None''',
         language="python",
         symbols=["authenticate_user"],
-        ast_hash="hash1"
+        ast_hash="hash1",
     ),
     CodeChunk(
         file_path="src/auth.py",
         start_line=50,
         end_line=70,
-        code='''class AuthService:
+        code="""class AuthService:
     def __init__(self, db_connection):
         self.db = db_connection
 
@@ -45,10 +46,10 @@ sample_chunks = [
         user = self.db.find_user(email)
         if user and user.check_password(password):
             return jwt.encode({"sub": user.id})
-        raise AuthError("Invalid credentials")''',
+        raise AuthError("Invalid credentials")""",
         language="python",
         symbols=["AuthService", "login"],
-        ast_hash="hash2"
+        ast_hash="hash2",
     ),
     CodeChunk(
         file_path="src/parser.py",
@@ -64,28 +65,28 @@ sample_chunks = [
         return None''',
         language="python",
         symbols=["parse_json"],
-        ast_hash="hash3"
+        ast_hash="hash3",
     ),
     CodeChunk(
         file_path="src/parser.py",
         start_line=100,
         end_line=120,
-        code='''class JSONParser:
+        code="""class JSONParser:
     def __init__(self, strict_mode=False):
         self.strict = strict_mode
 
     def parse(self, data):
         import json
-        return json.loads(data) if data else {}''',
+        return json.loads(data) if data else {}""",
         language="python",
         symbols=["JSONParser", "parse"],
-        ast_hash="hash4"
+        ast_hash="hash4",
     ),
     CodeChunk(
         file_path="lib/utils.js",
         start_line=1,
         end_line=15,
-        code='''function formatDate(date) {
+        code="""function formatDate(date) {
     return new Date(date).toISOString();
 }
 
@@ -94,10 +95,10 @@ function validateEmail(email) {
     return re.test(email);
 }
 
-module.exports = { formatDate, validateEmail };''',
+module.exports = { formatDate, validateEmail };""",
         language="javascript",
         symbols=["formatDate", "validateEmail"],
-        ast_hash="hash5"
+        ast_hash="hash5",
     ),
 ]
 
@@ -124,7 +125,7 @@ metadata = [
         "start_line": chunk.start_line,
         "end_line": chunk.end_line,
         "code": chunk.code,
-        "language": chunk.language
+        "language": chunk.language,
     }
     for chunk in sample_chunks
 ]
@@ -152,9 +153,11 @@ for query in search_queries:
         if id_ < 0:
             continue
         meta = metadata[id_]
-        print(f"      [{score:.3f}] {meta['file_path']}:{meta['start_line']}-{meta['end_line']}")
+        print(
+            f"      [{score:.3f}] {meta['file_path']}:{meta['start_line']}-{meta['end_line']}"
+        )
         print(f"           Lang: {meta['language']}")
-        preview = meta['code'][:60].replace('\n', ' ')
+        preview = meta["code"][:60].replace("\n", " ")
         print(f"           {preview}...")
 
 print("\n[4/4] Testing language filtering...")
@@ -168,7 +171,7 @@ for score, id_ in zip(scores[0], ids[0]):
     if id_ < 0:
         continue
     meta = metadata[id_]
-    if meta['language'] == 'python':
+    if meta["language"] == "python":
         python_results.append((score, meta))
 
 print(f"   Python-only results: {len(python_results)}")
@@ -178,10 +181,12 @@ for score, meta in python_results:
 print("\n" + "=" * 60)
 print("Demo completed successfully!")
 print("=" * 60)
-print("""
+print(
+    """
 To run with real embeddings:
 1. pip install -r requirements.txt
 2. coarch serve
 3. coarch index /path/to/your/repo
 4. coarch search "your query"
-""")
+"""
+)

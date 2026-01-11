@@ -2,6 +2,7 @@
 
 import sys
 import os
+
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 print("=" * 60)
@@ -62,7 +63,7 @@ try:
 
     analyzer = TreeSitterAnalyzer()
 
-    python_code = '''
+    python_code = """
 def hello_world(name):
     print(f"Hello, {name}!")
     return True
@@ -73,14 +74,14 @@ class Greeter:
 
     def greet(self, name):
         return f"{self.greeting}, {name}!"
-'''
+"""
 
     symbols = analyzer.extract_symbols(python_code, "python")
     print(f"   [OK] Found {len(symbols)} symbols in Python code")
     for sym in symbols[:5]:
         print(f"      - {sym.type}: {sym.name}")
 
-    js_code = '''
+    js_code = """
 import React from "react";
 import { useState } from "react";
 
@@ -88,7 +89,7 @@ function Counter({ initial = 0 }) {
     const [count, setCount] = useState(initial);
     return <button>{count}</button>;
 }
-'''
+"""
 
     js_symbols = analyzer.extract_symbols(js_code, "javascript")
     print(f"   [OK] Found {len(js_symbols)} symbols in JavaScript code")
@@ -108,7 +109,7 @@ try:
         imports=["os", "sys"],
         function_calls=["open", "read", "write"],
         ast_hash="abc123",
-        complexity=5
+        complexity=5,
     )
     print(f"   [OK] StructuralInfo created")
     print(f"   [OK] Imports: {info.imports}")

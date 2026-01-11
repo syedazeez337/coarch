@@ -3,6 +3,7 @@ version: '3.8'
 services:
   coarch:
     build: .
+    container_name: coarch-server
     ports:
       - "8000:8000"
     volumes:
@@ -13,7 +14,38 @@ services:
       - COARCH_DB_PATH=/data/coarch.db
       - COARCH_SERVER_HOST=0.0.0.0
       - COARCH_SERVER_PORT=8000
+      - COARCH_LOG_LEVEL=INFO
+      - COARCH_ALLOWED_ORIGINS=http://localhost:3000,http://localhost:8000
+      - COARCH_RATE_LIMIT=60
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+    deploy:
+      resources:
+        limits:
+          memory: 4G
+        reservations:
+          memory: 2G
+
+  coarch-web:
+    image: nginx:alpine
+    container_name: coarch-web
+    ports:
+      - "3000:80"
+    volumes:
+      - ./web:/usr/share/nginx/html:ro
+    depends_on:
+      - coarch
     restart: unless-stopped
 
 volumes:
   coarch_data:
+    driver: local
+
+networks:
+  default:
+    name: coarch-network

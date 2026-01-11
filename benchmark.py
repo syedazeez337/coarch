@@ -4,6 +4,7 @@ import sys
 import os
 import time
 import numpy as np
+
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 print("=" * 70)
@@ -46,7 +47,9 @@ print("-" * 50)
 fp32_embeddings = np.random.random((1000, dim)).astype(np.float32)
 
 start = time.time()
-quantized = np.round(fp32_embeddings * 127 / np.abs(fp32_embeddings).max()).astype(np.int8)
+quantized = np.round(fp32_embeddings * 127 / np.abs(fp32_embeddings).max()).astype(
+    np.int8
+)
 quantize_time = time.time() - start
 
 start = time.time()
@@ -115,13 +118,13 @@ for batch_size in batch_sizes:
     n_batches = (total_items + batch_size - 1) // batch_size
     per_batch_overhead = 0.5  # ms
 
-    items_per_sec = 1000 / ((total_items / batch_size) * 0.1 + per_batch_overhead * n_batches / 1000)
+    items_per_sec = 1000 / (
+        (total_items / batch_size) * 0.1 + per_batch_overhead * n_batches / 1000
+    )
     print(f"   Batch {batch_size:3d}: ~{items_per_sec:,.0f} items/sec")
 
 print("\n[5/5] Parallel Processing")
 print("-" * 50)
-
-from multiprocessing import cpu_count
 
 n_workers_list = [1, 2, 4, 8]
 n_files = 100
@@ -135,7 +138,8 @@ for n_workers in n_workers_list:
 print("\n" + "=" * 70)
 print("Benchmark Complete")
 print("=" * 70)
-print("""
+print(
+    """
 Performance Summary:
 - HNSW: Sub-millisecond search for millions of vectors
 - Quantization: 4x smaller, 2x faster storage
@@ -147,4 +151,5 @@ Recommended Settings:
 - Quantization: INT8 for storage > 1M vectors
 - Batch size: 32-64 for optimal throughput
 - Workers: cpu_count() for chunking
-""")
+"""
+)

@@ -2,14 +2,15 @@
 
 import os
 import time
-from typing import List, Dict, Optional, Set, Tuple, Any
-from dataclasses import dataclass, field, asdict
+from typing import List, Dict, Optional, Tuple, Any
+from dataclasses import dataclass, field
 from pathlib import Path
 
 
 @dataclass
 class TreeSitterSymbol:
     """A symbol extracted from Tree-sitter AST."""
+
     name: str
     type: str
     start_point: Tuple[int, int]
@@ -21,6 +22,7 @@ class TreeSitterSymbol:
 @dataclass
 class TreeSitterParseResult:
     """Result of parsing a file with Tree-sitter."""
+
     file_path: str
     language: str
     root_node: Any
@@ -53,11 +55,19 @@ class TreeSitterCAnalyzer:
     }
 
     NODE_TYPES = {
-        "function_definition", "function_declaration", "method_definition",
-        "class_definition", "class_declaration", "struct_declaration",
-        "import_statement", "import_from_statement",
-        "call_expression", "method_call_expression",
-        "variable_declarator", "const_declarator", "let_declarator",
+        "function_definition",
+        "function_declaration",
+        "method_definition",
+        "class_definition",
+        "class_declaration",
+        "struct_declaration",
+        "import_statement",
+        "import_from_statement",
+        "call_expression",
+        "method_call_expression",
+        "variable_declarator",
+        "const_declarator",
+        "let_declarator",
     }
 
     def __init__(self, use_c_binding: bool = True, cache_dir: Optional[str] = None):
@@ -81,9 +91,12 @@ class TreeSitterCAnalyzer:
         """Initialize Tree-sitter C bindings."""
         try:
             import tree_sitter
+
             self.ts = tree_sitter
             self._use_native = True
-            print("[OK] Tree-sitter C bindings loaded (using regex fallback for symbols)")
+            print(
+                "[OK] Tree-sitter C bindings loaded (using regex fallback for symbols)"
+            )
         except ImportError:
             print("[WARN] Tree-sitter C bindings not available, using pure Python")
             self._init_pure_python()
@@ -126,11 +139,13 @@ class TreeSitterCAnalyzer:
 
         try:
             from tree_sitter import Language
+
             lang_path = os.path.join(self.cache_dir, f"languages-{language}.so")
             os.makedirs(self.cache_dir, exist_ok=True)
 
             if not os.path.exists(lang_path):
                 from tree_sitter_languages import get_language
+
                 lang = get_language(language)
                 with open(lang_path, "wb") as f:
                     f.write(lang.sp_bin)
@@ -141,7 +156,9 @@ class TreeSitterCAnalyzer:
             print(f"Failed to load language {language}: {e}")
             return None
 
-    def parse_file(self, file_path: str, timeout_ms: int = 30000) -> TreeSitterParseResult:
+    def parse_file(
+        self, file_path: str, timeout_ms: int = 30000
+    ) -> TreeSitterParseResult:
         """Parse a file using Tree-sitter.
 
         Args:
@@ -158,10 +175,7 @@ class TreeSitterCAnalyzer:
                 code = f.read()
         except Exception as e:
             return TreeSitterParseResult(
-                file_path=file_path,
-                language="",
-                root_node=None,
-                error=str(e)
+                file_path=file_path, language="", root_node=None, error=str(e)
             )
 
         language = self._get_language(file_path)
@@ -170,13 +184,15 @@ class TreeSitterCAnalyzer:
                 file_path=file_path,
                 language="",
                 root_node=None,
-                error="Unsupported language"
+                error="Unsupported language",
             )
 
         parse_time_ms = (time.time() - start_time) * 1000
 
         if self._use_native:
-            return self._parse_native(file_path, code, language, timeout_ms, parse_time_ms)
+            return self._parse_native(
+                file_path, code, language, timeout_ms, parse_time_ms
+            )
         else:
             return self._parse_regex(file_path, code, language, parse_time_ms)
 
@@ -186,7 +202,7 @@ class TreeSitterCAnalyzer:
         code: str,
         language: str,
         timeout_ms: int,
-        parse_time_ms: float
+        parse_time_ms: float,
     ) -> TreeSitterParseResult:
         """Parse using Tree-sitter C bindings."""
         try:
@@ -196,7 +212,7 @@ class TreeSitterCAnalyzer:
                     file_path=file_path,
                     language=language,
                     root_node=None,
-                    error="Language not loaded"
+                    error="Language not loaded",
                 )
 
             parser = self.ts.Parser()
@@ -218,17 +234,16 @@ class TreeSitterCAnalyzer:
                 symbols=symbols,
                 imports=imports,
                 function_calls=function_calls,
-                parse_time_ms=parse_time_ms
+                parse_time_ms=parse_time_ms,
             )
         except Exception as e:
             return TreeSitterParseResult(
-                file_path=file_path,
-                language=language,
-                root_node=None,
-                error=str(e)
+                file_path=file_path, language=language, root_node=None, error=str(e)
             )
 
-    def _extract_symbols_native(self, node: Any, language: str) -> List[TreeSitterSymbol]:
+    def _extract_symbols_native(
+        self, node: Any, language: str
+    ) -> List[TreeSitterSymbol]:
         """Extract symbols from native Tree-sitter AST."""
         symbols = []
 
@@ -239,7 +254,7 @@ class TreeSitterCAnalyzer:
                     type=self._map_node_type(node.type, language),
                     start_point=node.start_point,
                     end_point=node.end_point,
-                    children=[c.type for c in node.children if c.type != "_empty"]
+                    children=[c.type for c in node.children if c.type != "_empty"],
                 )
                 symbols.append(symbol)
 
@@ -254,7 +269,11 @@ class TreeSitterCAnalyzer:
         if hasattr(node, "named_children"):
             for child in node.named_children:
                 if child.type in ("identifier", "name", "function_name"):
-                    return child.text.decode() if isinstance(child.text, bytes) else str(child.text)
+                    return (
+                        child.text.decode()
+                        if isinstance(child.text, bytes)
+                        else str(child.text)
+                    )
         if hasattr(node, "text"):
             text = node.text
             return text.decode() if isinstance(text, bytes) else str(text)
@@ -309,11 +328,7 @@ class TreeSitterCAnalyzer:
         return list(set(calls))
 
     def _parse_regex(
-        self,
-        file_path: str,
-        code: str,
-        language: str,
-        parse_time_ms: float
+        self, file_path: str, code: str, language: str, parse_time_ms: float
     ) -> TreeSitterParseResult:
         """Parse using regex fallback (slower but no dependencies)."""
         extractors = self._regex_symbols.get(language, {})
@@ -321,20 +336,22 @@ class TreeSitterCAnalyzer:
 
         for sym_type, pattern in extractors.items():
             for match in pattern.finditer(code):
-                line = code[:match.start()].count("\n") + 1
-                symbols.append(TreeSitterSymbol(
-                    name=match.group(1),
-                    type=sym_type,
-                    start_point=(line, 0),
-                    end_point=(line, 0)
-                ))
+                line = code[: match.start()].count("\n") + 1
+                symbols.append(
+                    TreeSitterSymbol(
+                        name=match.group(1),
+                        type=sym_type,
+                        start_point=(line, 0),
+                        end_point=(line, 0),
+                    )
+                )
 
         return TreeSitterParseResult(
             file_path=file_path,
             language=language,
             root_node=None,
             symbols=symbols,
-            parse_time_ms=parse_time_ms
+            parse_time_ms=parse_time_ms,
         )
 
     def parse_code(self, code: str, language: str) -> TreeSitterParseResult:
@@ -349,7 +366,7 @@ class TreeSitterCAnalyzer:
                         file_path="",
                         language=language,
                         root_node=None,
-                        error="Language not loaded"
+                        error="Language not loaded",
                     )
 
                 parser = self.ts.Parser()
@@ -369,19 +386,18 @@ class TreeSitterCAnalyzer:
                     symbols=symbols,
                     imports=imports,
                     function_calls=function_calls,
-                    parse_time_ms=parse_time_ms
+                    parse_time_ms=parse_time_ms,
                 )
             except Exception as e:
                 return TreeSitterParseResult(
-                    file_path="",
-                    language=language,
-                    root_node=None,
-                    error=str(e)
+                    file_path="", language=language, root_node=None, error=str(e)
                 )
         else:
             return self._parse_regex("", code, language, 0)
 
-    def batch_parse(self, file_paths: List[str], show_progress: bool = True) -> List[TreeSitterParseResult]:
+    def batch_parse(
+        self, file_paths: List[str], show_progress: bool = True
+    ) -> List[TreeSitterParseResult]:
         """Parse multiple files."""
         from tqdm import tqdm
 
@@ -392,7 +408,9 @@ class TreeSitterCAnalyzer:
 
         return results
 
-    def get_symbols_by_type(self, symbols: List[TreeSitterSymbol]) -> Dict[str, List[str]]:
+    def get_symbols_by_type(
+        self, symbols: List[TreeSitterSymbol]
+    ) -> Dict[str, List[str]]:
         """Group symbols by type."""
         grouped = {}
         for sym in symbols:

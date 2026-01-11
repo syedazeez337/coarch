@@ -1,63 +1,118 @@
-# Coarch - Local-First Code Search Engine
+# Coarch - Production-Ready Code Search Engine
 
-A semantic code search engine with editor plugins. Find similar code, discover patterns, and navigate codebases intelligently.
+A production-ready semantic code search engine with security, monitoring, and enterprise features.
 
-## Why Coarch?
+## Security Features
 
-| Feature | Coarch | Sourcegraph | GitHub Code Search |
-|---------|--------|-------------|-------------------|
-| Local-first (privacy) | ✅ | ❌ | ❌ |
-| Real-time indexing | ✅ | ❌ | ❌ |
-| Semantic + Structural | ✅ | ❌ | ❌ |
-| Editor-native | ✅ | Web only | Web only |
-| Free forever | ✅ | Paid tiers | Limited |
+- **Authentication**: API token-based authentication with configurable enable/disable
+- **Rate Limiting**: Built-in rate limiter to prevent DoS attacks (60 req/min default)
+- **Input Validation**: Comprehensive input sanitization for queries, paths, and parameters
+- **Path Traversal Prevention**: Strict path validation and allowed directory enforcement
+- **CORS Configuration**: Configurable CORS origins (not wildcarded by default)
 
-## Features
+## Production Features
 
-- **Semantic Search** - Find code by meaning, not just keywords
-- **Hybrid Analysis** - Combines FAISS embeddings + Tree-sitter AST analysis
-- **Local-First** - 100% private, no data leaves your machine
-- **Real-Time** - Indexes as you type
-- **Editor Plugins** - VS Code, Neovim, Emacs support
-- **Cross-Repo** - Search all your repos at once
+- **Structured Logging**: JSON-formatted logs with configurable output
+- **Health Checks**: `/health` endpoint for container orchestration
+- **Metrics**: Prometheus-compatible `/metrics` endpoint
+- **Request Tracing**: X-Request-ID and X-Process-Time headers
+- **Error Handling**: Global exception handler with structured error responses
 
 ## Quick Start
 
 ```bash
-# Install
-pip install coarch
+# Install dependencies
+pip install -r requirements.txt
+
+# Initialize configuration
+coarch init
 
 # Index a repository
 coarch index /path/to/your/repo
 
 # Start the server
-coarch serve
+coarch serve --host 0.0.0.0 --port 8000
+```
 
-# Search from CLI
-coarch search "function that parses JSON"
+## Environment Variables
 
-# Or use the API
-curl -X POST http://localhost:8000/search \
-  -H "Content-Type: application/json" \
-  -d '{"query": "function that parses JSON", "limit": 10}'
+| Variable | Description | Default |
+|----------|-------------|---------|
+| `COARCH_INDEX_PATH` | Path to FAISS index | `~/.coarch/index` |
+| `COARCH_DB_PATH` | Path to SQLite database | `~/.coarch/coarch.db` |
+| `COARCH_SERVER_HOST` | Server bind host | `0.0.0.0` |
+| `COARCH_SERVER_PORT` | Server port | `8000` |
+| `COARCH_LOG_LEVEL` | Logging level | `INFO` |
+| `COARCH_LOG_JSON` | Use JSON logging | `false` |
+| `COARCH_ALLOWED_ORIGINS` | CORS allowed origins | `http://localhost:3000` |
+| `COARCH_RATE_LIMIT` | Requests per minute | `60` |
+| `COARCH_ENABLE_AUTH` | Enable API authentication | `false` |
+| `COARCH_API_KEY` | API key for authentication | `None` |
+
+## API Endpoints
+
+### Search
+
+```bash
+POST /search
+{
+  "query": "function that parses JSON",
+  "language": "python",
+  "limit": 10
+}
+```
+
+### Health Check
+
+```bash
+GET /health
+```
+
+### Metrics
+
+```bash
+GET /metrics
+```
+
+## Docker
+
+```bash
+# Build
+docker build -t coarch .
+
+# Run
+docker run -p 8000:8000 \
+  -v coarch_data:/data \
+  -e COARCH_ALLOWED_ORIGINS="http://localhost:3000" \
+  coarch
+```
+
+## Configuration
+
+Configuration is stored in `~/.coarch/config.json`:
+
+```json
+{
+  "version": "1.0",
+  "index_path": "~/.coarch/index",
+  "db_path": "~/.coarch/coarch.db",
+  "server_port": 8000,
+  "rate_limit_per_minute": 60,
+  "enable_auth": false,
+  "cors_origins": ["http://localhost:3000"]
+}
 ```
 
 ## Architecture
 
 ```
-┌────────────────────────────────────────────────────────────┐
-│                        Editor Plugins                       │
-│         (VS Code ←→ Neovim ←→ Emacs ←→ CLI)                │
-└────────────────────────┬───────────────────────────────────┘
-                         │ REST/MCP
-                         ▼
-┌────────────────────────────────────────────────────────────┐
-│                    Coarch Server (FastAPI)                  │
-│  ┌─────────────┐  ┌─────────────┐  ┌─────────────────────┐ │
-│  │   Search    │  │   Index     │  │  WebSocket (real-   │ │
-│  │   API       │  │   Manager   │  │  time updates)      │ │
-│  └──────┬──────┘  └──────┬──────┘  └─────────────────────┘ │
-└─────────┼────────────────┼─────────────────────────────────┘
+┌─────────────────────────────────────────────────────────────┐
+│                     Coarch Server (FastAPI)                   │
+│  ┌─────────────┐  ┌─────────────┐  ┌─────────────────────┐  │
+│  │   Search    │  │   Index     │  │  Health/Metrics     │  │
+│  │   API       │  │   Manager   │  │  /health /metrics   │  │
+│  └──────┬──────┘  └──────┬──────┘  └─────────────────────┘  │
+└─────────┼────────────────┼───────────────────────────────────┘
           │                │
     ┌─────▼─────┐    ┌─────▼─────┐
     │   FAISS   │    │  SQLite   │
@@ -70,78 +125,32 @@ curl -X POST http://localhost:8000/search \
     └───────────┘
 ```
 
-## API Endpoints
+## Development
 
-### Search
 ```bash
-POST /search
-{
-  "query": "authenticate user with JWT",
-  "language": "python",
-  "limit": 10
-}
+# Install development dependencies
+pip install -r requirements.txt
+pip install black mypy pytest pytest-cov
+
+# Run tests
+pytest tests/ -v --cov=backend
+
+# Format code
+black .
+
+# Type checking
+mypy .
 ```
 
-### Index Repository
-```bash
-POST /index/repo
-{
-  "path": "/path/to/repo",
-  "name": "my-project"
-}
-```
+## Security Checklist for Production
 
-### Status
-```bash
-GET /index/status
-```
-
-## Editor Plugins
-
-### VS Code
-```bash
-# Install from VS Code marketplace (coming soon)
-ext install coarch.vscode
-```
-
-### Neovim
-```lua
--- Using lazy.nvim
-{ "syedazeez337/coarch.nvim" }
-```
-
-## Configuration
-
-```yaml
-# ~/.coarch/config.yaml
-index_path: ~/.coarch/index
-db_path: ~/.coarch/coarch.db
-model: microsoft/codebert-base
-batch_size: 32
-max_sequence_length: 512
-```
-
-## Tech Stack
-
-- **FAISS** - Billion-scale vector search (HNSW index)
-- **CodeBERT** - Code understanding embeddings
-- **Tree-sitter** - AST parsing for structural analysis
-- **FastAPI** - High-performance async API
-- **SQLite** - Lightweight metadata storage
-
-## Contributing
-
-1. Fork the repository
-2. Create a feature branch
-3. Make your changes
-4. Submit a PR
+- [ ] Set `COARCH_ENABLE_AUTH=true` and provide `COARCH_API_KEY`
+- [ ] Configure `COARCH_ALLOWED_ORIGINS` with your frontend domain
+- [ ] Set `COARCH_LOG_LEVEL=INFO` or higher
+- [ ] Enable TLS/HTTPS on the server
+- [ ] Configure rate limiting based on your needs
+- [ ] Review and customize `IGNORE_DIRS` for your codebase
 
 ## License
 
-MIT License - see LICENSE file
-
-## Acknowledgments
-
-- [FAISS](https://github.com/facebookresearch/faiss) - Facebook AI Similarity Search
-- [CodeBERT](https://huggingface.co/microsoft/codebert-base) - Microsoft Research
-- [Tree-sitter](https://tree-sitter.github.io/tree-sitter/) - Parsing tool
+MIT License

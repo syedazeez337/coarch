@@ -1,7 +1,5 @@
 """GPU embedding support for Coarch."""
 
-import os
-from typing import Optional
 import numpy as np
 
 
@@ -18,21 +16,25 @@ def check_gpu_availability() -> dict:
 
     try:
         import torch
+
         if torch.cuda.is_available():
             info["cuda_available"] = True
             info["device_count"] = torch.cuda.device_count()
             info["device_name"] = torch.cuda.get_device_name(0)
-            info["memory_total_mb"] = torch.cuda.get_device_properties(0).total_memory / 1024 / 1024
+            info["memory_total_mb"] = (
+                torch.cuda.get_device_properties(0).total_memory / 1024 / 1024
+            )
             info["driver_version"] = torch.version.cuda
     except ImportError:
         pass
 
     try:
         import torch
-        if hasattr(torch, 'hip') and torch.hip.is_available():
+
+        if hasattr(torch, "hip") and torch.hip.is_available():
             info["rocm_available"] = True
             info["device_count"] = torch.hip.device_count()
-    except:
+    except Exception:
         pass
 
     return info
@@ -45,7 +47,7 @@ class GPUEmbedder:
         self,
         model_name: str = "microsoft/codebert-base",
         device: str = "cuda",
-        batch_size: int = 64
+        batch_size: int = 64,
     ):
         """Initialize GPU embedder.
 
@@ -95,19 +97,18 @@ class GPUEmbedder:
             numpy array of embeddings
         """
         import torch
-        from tqdm import tqdm
 
         all_embeddings = []
 
         for i in range(0, len(texts), self.batch_size):
-            batch = texts[i:i + self.batch_size]
+            batch = texts[i : i + self.batch_size]
 
             inputs = self.tokenizer(
                 batch,
                 padding=True,
                 truncation=True,
                 max_length=512,
-                return_tensors="pt"
+                return_tensors="pt",
             ).to(self.device)
 
             with torch.no_grad():
@@ -124,6 +125,7 @@ class GPUEmbedder:
     def get_dimension(self) -> int:
         """Return embedding dimension."""
         from transformers import AutoConfig
+
         config = AutoConfig.from_pretrained(self.model_name)
         return config.hidden_size
 
@@ -135,7 +137,7 @@ class GPUEmbedder:
 
         torch.backends.cudnn.benchmark = True
 
-        if hasattr(self.model, 'encoder'):
+        if hasattr(self.model, "encoder"):
             self.model.encoder.layer = torch.nn.ModuleList(
                 [layer.half() for layer in self.model.encoder.layer]
             )
@@ -155,7 +157,7 @@ class GPUEmbedder:
         return {
             "allocated_mb": allocated,
             "reserved_mb": reserved,
-            "device_name": torch.cuda.get_device_name(0)
+            "device_name": torch.cuda.get_device_name(0),
         }
 
 
@@ -176,6 +178,7 @@ class GPUIndex:
         """Initialize GPU index."""
         try:
             import faiss
+
             res = faiss.StandardGpuResources()
             self.index = faiss.IndexFlatIP(self.dim)
             self.gpu_index = faiss.index_cpu_to_gpu(res, 0, self.index)
@@ -183,6 +186,7 @@ class GPUIndex:
         except Exception as e:
             print(f"[WARN] GPU index not available: {e}, using CPU")
             import faiss
+
             self.index = faiss.IndexFlatIP(self.dim)
 
     def add(self, embeddings: np.ndarray):
@@ -192,6 +196,7 @@ class GPUIndex:
             embeddings: numpy array of shape (n, dim)
         """
         import faiss
+
         faiss.normalize_L2(embeddings)
         self.index.add(embeddings.astype(np.float32))
 
@@ -206,6 +211,7 @@ class GPUIndex:
             Tuple of (scores, ids)
         """
         import faiss
+
         faiss.normalize_L2(query.reshape(1, -1))
         return self.index.search(query.reshape(1, -1).astype(np.float32), k)
 
@@ -216,9 +222,11 @@ class GPUIndex:
     def save(self, path: str):
         """Save index to disk."""
         import faiss
+
         faiss.write_index(self.index, path)
 
     def load(self, path: str):
         """Load index from disk."""
         import faiss
+
         self.index = faiss.read_index(path)

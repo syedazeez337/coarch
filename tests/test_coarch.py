@@ -1,14 +1,17 @@
-"""Comprehensive unit tests for Coarch."""
+"""Comprehensive unit tests for Coarch with production coverage."""
 
 import os
 import sys
-import json
 import tempfile
+import warnings
 import unittest
 from pathlib import Path
-from unittest.mock import Mock, patch, MagicMock
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+
+warnings.filterwarnings("ignore", category=DeprecationWarning, module="frozenlib")
+warnings.filterwarnings("ignore", category=DeprecationWarning, module="faiss")
+warnings.filterwarnings("ignore", message="builtin type SwigPy.*has no __module__")
 
 
 class TestConfig(unittest.TestCase):
@@ -22,6 +25,7 @@ class TestConfig(unittest.TestCase):
     def tearDown(self):
         """Clean up test fixtures."""
         import shutil
+
         if os.path.exists(self.temp_dir):
             shutil.rmtree(self.temp_dir)
 
@@ -40,6 +44,8 @@ class TestConfig(unittest.TestCase):
         self.assertFalse(config.use_gpu)
         self.assertEqual(config.server_port, 8000)
         self.assertEqual(config.max_results, 20)
+        self.assertEqual(config.rate_limit_per_minute, 60)
+        self.assertFalse(config.enable_auth)
 
     def test_save_and_load_config(self):
         """Test saving and loading config."""
@@ -50,6 +56,7 @@ class TestConfig(unittest.TestCase):
             db_path="/custom/db",
             batch_size=64,
             server_port=9000,
+            rate_limit_per_minute=120,
         )
 
         config.save(self.config_path)
@@ -60,6 +67,7 @@ class TestConfig(unittest.TestCase):
         self.assertEqual(loaded.db_path, "/custom/db")
         self.assertEqual(loaded.batch_size, 64)
         self.assertEqual(loaded.server_port, 9000)
+        self.assertEqual(loaded.rate_limit_per_minute, 120)
 
     def test_add_remove_indexed_repo(self):
         """Test adding and removing indexed repos."""
@@ -73,7 +81,8 @@ class TestConfig(unittest.TestCase):
 
         self.assertEqual(len(config.indexed_repos), 2)
 
-        config.remove_indexed_repo("/path/to/repo1")
+        result = config.remove_indexed_repo("/path/to/repo1")
+        self.assertTrue(result)
         self.assertEqual(len(config.indexed_repos), 1)
         self.assertEqual(config.indexed_repos[0]["name"], "repo2")
 
@@ -81,15 +90,79 @@ class TestConfig(unittest.TestCase):
         """Test path expansion."""
         from backend.config import CoarchConfig
 
-        config = CoarchConfig(
-            index_path="~/coarch_index",
-            db_path="~/coarch.db"
-        )
+        config = CoarchConfig(index_path="~/coarch_index", db_path="~/coarch.db")
 
         paths = config.get_expanded_paths()
 
         self.assertTrue(paths["index_path"].endswith("coarch_index"))
         self.assertTrue(paths["db_path"].endswith("coarch.db"))
+
+    def test_config_validation(self):
+        """Test configuration validation."""
+        from backend.config import CoarchConfig
+
+        config = CoarchConfig(server_port=0)
+        errors = config.validate()
+        self.assertIn("Invalid server port", errors[0])
+
+        config = CoarchConfig(max_results=0)
+        errors = config.validate()
+        self.assertIn("Invalid max_results", errors[0])
+
+        config = CoarchConfig(enable_auth=True)
+        errors = config.validate()
+        self.assertIn("API key required when auth is enabled", errors[0])
+
+
+class TestSecurity(unittest.TestCase):
+    """Tests for security utilities."""
+
+    def test_sanitize_query(self):
+        """Test search query sanitization."""
+        from backend.security import sanitize_search_query
+
+        result = sanitize_search_query("normal query")
+        self.assertEqual(result, "normal query")
+
+        result = sanitize_search_query("query with spaces")
+        self.assertEqual(result, "query with spaces")
+
+        result = sanitize_search_query("   spaces   ")
+        self.assertEqual(result, "spaces")
+
+        result = sanitize_search_query("a" * 1500)
+        self.assertEqual(len(result), 1000)
+
+    def test_sanitize_language(self):
+        """Test language parameter sanitization."""
+        from backend.security import sanitize_language
+
+        self.assertEqual(sanitize_language("python"), "python")
+        self.assertEqual(sanitize_language("PYTHON"), "python")
+        self.assertEqual(sanitize_language("javascript"), "javascript")
+        self.assertEqual(sanitize_language("invalid++"), None)
+        self.assertIsNone(sanitize_language(None))
+
+    def test_validate_file_extension(self):
+        """Test file extension validation."""
+        from backend.security import validate_file_extension
+
+        self.assertTrue(validate_file_extension("test.py"))
+        self.assertTrue(validate_file_extension("test.js"))
+        self.assertTrue(validate_file_extension("test.java"))
+        self.assertFalse(validate_file_extension("test.exe"))
+        self.assertFalse(validate_file_extension("test.dll"))
+
+    def test_rate_limiter(self):
+        """Test rate limiter functionality."""
+        from backend.security import ThreadSafeRateLimiter
+
+        limiter = ThreadSafeRateLimiter(requests_per_minute=3)
+
+        for i in range(3):
+            self.assertTrue(limiter.check_rate_limit("test_client"))
+
+        self.assertFalse(limiter.check_rate_limit("test_client"))
 
 
 class TestIndexer(unittest.TestCase):
@@ -103,6 +176,7 @@ class TestIndexer(unittest.TestCase):
     def tearDown(self):
         """Clean up test fixtures."""
         import shutil
+
         if os.path.exists(self.temp_dir):
             shutil.rmtree(self.temp_dir)
 
@@ -153,7 +227,7 @@ class TestIndexer(unittest.TestCase):
 
         indexer = RepositoryIndexer(db_path=self.db_path)
 
-        code = '''
+        code = """
 def hello():
     print("Hello")
 
@@ -163,7 +237,7 @@ class World:
 
 def world():
     pass
-'''
+"""
 
         chunks = indexer.extract_code_chunks("test.py", code)
 
@@ -172,6 +246,25 @@ def world():
             self.assertEqual(chunk.language, "python")
             self.assertIn("def", chunk.code.lower())
             self.assertGreater(chunk.start_line, 0)
+
+    def test_extract_symbols(self):
+        """Test symbol extraction."""
+        from backend.indexer import RepositoryIndexer
+
+        indexer = RepositoryIndexer(db_path=self.db_path)
+
+        code = """
+def hello_world():
+    pass
+
+class MyClass:
+    pass
+"""
+
+        symbols = indexer._extract_symbols(code, "python")
+
+        self.assertIn("hello_world", symbols)
+        self.assertIn("MyClass", symbols)
 
 
 class TestASTAnalyzer(unittest.TestCase):
@@ -212,7 +305,7 @@ class Greeter:
 
         analyzer = TreeSitterAnalyzer()
 
-        code = '''
+        code = """
 import React from "react";
 import { useState } from "react";
 
@@ -230,12 +323,11 @@ class Button {
         return "Clicked";
     }
 }
-'''
+"""
 
         symbols = analyzer.extract_symbols(code, "javascript")
 
         symbol_names = [s.name for s in symbols]
-        symbol_types = {s.type for s in symbols}
 
         self.assertIn("Counter", symbol_names)
         self.assertIn("Button", symbol_names)
@@ -247,7 +339,7 @@ class Button {
 
         analyzer = TreeSitterAnalyzer()
 
-        code = '''
+        code = """
 package main
 
 import "fmt"
@@ -264,7 +356,7 @@ type Person struct {
 func (p *Person) Greet() string {
     return fmt.Sprintf("Hi, I'm %s", p.Name)
 }
-'''
+"""
 
         symbols = analyzer.extract_symbols(code, "go")
 
@@ -281,7 +373,7 @@ func (p *Person) Greet() string {
         analyzer = TreeSitterAnalyzer()
 
         simple_code = "def foo(): pass"
-        complex_code = '''
+        complex_code = """
 def foo(x):
     if x > 0:
         if x > 10:
@@ -289,7 +381,7 @@ def foo(x):
                 if x % 2 == 0:
                     return x
     return 0
-'''
+"""
 
         simple_complexity = analyzer._calculate_complexity(simple_code)
         complex_complexity = analyzer._calculate_complexity(complex_code)
@@ -305,8 +397,8 @@ class TestFAISSIndex(unittest.TestCase):
         import faiss
         import numpy as np
 
-        self.dim = 768
-        self.index = faiss.IndexHNSWFlat(self.dim, 32, faiss.METRIC_INNER_PRODUCT)
+        self.dim = 64
+        self.index = faiss.IndexHNSWFlat(self.dim, 16, faiss.METRIC_INNER_PRODUCT)
 
         self.test_vectors = np.random.random((100, self.dim)).astype(np.float32)
         faiss.normalize_L2(self.test_vectors)
@@ -374,10 +466,7 @@ class TestFileWatcher(unittest.TestCase):
         """Test FileEvent creation."""
         from backend.file_watcher import FileEvent
 
-        event = FileEvent(
-            event_type="modified",
-            file_path="/path/to/file.py"
-        )
+        event = FileEvent(event_type="modified", file_path="/path/to/file.py")
 
         self.assertEqual(event.event_type, "modified")
         self.assertEqual(event.file_path, "/path/to/file.py")
@@ -386,15 +475,20 @@ class TestFileWatcher(unittest.TestCase):
     def test_file_watcher_initialization(self):
         """Test FileWatcher initialization."""
         from backend.file_watcher import FileWatcher
+        import tempfile
 
-        watcher = FileWatcher(
-            paths={"/tmp", "/var"},
-            ignore_patterns={".git", "node_modules"},
-            debounce_ms=100
-        )
+        with (
+            tempfile.TemporaryDirectory() as tmpdir1,
+            tempfile.TemporaryDirectory() as tmpdir2,
+        ):
+            watcher = FileWatcher(
+                paths={tmpdir1, tmpdir2},
+                ignore_patterns={".git", "node_modules"},
+                debounce_ms=100,
+            )
 
-        self.assertEqual(watcher.debounce_ms, 100)
-        self.assertEqual(len(watcher.paths), 2)
+            self.assertEqual(watcher.debounce_ms, 100)
+            self.assertEqual(len(watcher.paths), 2)
 
 
 class TestCodeChunk(unittest.TestCase):
@@ -411,7 +505,7 @@ class TestCodeChunk(unittest.TestCase):
             code="def hello(): pass",
             language="python",
             symbols=["hello"],
-            ast_hash="abc123"
+            ast_hash="abc123",
         )
 
         self.assertEqual(chunk.file_path, "/src/main.py")
@@ -434,7 +528,7 @@ class TestStructuralInfo(unittest.TestCase):
             imports=["os", "sys"],
             function_calls=["open", "read"],
             ast_hash="hash123",
-            complexity=5
+            complexity=5,
         )
 
         self.assertEqual(info.file_path, "/test.py")
@@ -457,13 +551,43 @@ class TestSearchResult(unittest.TestCase):
             start_line=10,
             end_line=20,
             code="def hello(): pass",
-            language="python"
+            language="python",
         )
 
         self.assertEqual(result.id, 0)
         self.assertAlmostEqual(result.score, 0.95, places=2)
         self.assertEqual(result.file_path, "/src/main.py")
         self.assertEqual(result.language, "python")
+
+
+class TestLoggingConfig(unittest.TestCase):
+    """Tests for logging configuration."""
+
+    def test_logger_creation(self):
+        """Test logger creation."""
+        from backend.logging_config import get_logger
+
+        logger = get_logger("test")
+        self.assertEqual(logger.name, "coarch.test")
+
+    def test_plain_formatter(self):
+        """Test plain formatter."""
+        from backend.logging_config import PlainFormatter
+        import logging
+
+        formatter = PlainFormatter()
+        record = logging.LogRecord(
+            name="test",
+            level=logging.INFO,
+            pathname="test.py",
+            lineno=1,
+            msg="Test message",
+            args=(),
+            exc_info=None,
+        )
+
+        result = formatter.format(record)
+        self.assertIn("Test message", result)
 
 
 if __name__ == "__main__":

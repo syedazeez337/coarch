@@ -10,6 +10,7 @@ import time
 @dataclass
 class EmbeddingConfig:
     """Configuration for embedding generation."""
+
     model_name: str = "microsoft/codebert-base"
     max_length: int = 512
     batch_size: int = 32
@@ -22,9 +23,7 @@ class OptimizedEmbedder:
     """High-performance embedding generator with ONNX + quantization."""
 
     def __init__(
-        self,
-        config: Optional[EmbeddingConfig] = None,
-        onnx_path: Optional[str] = None
+        self, config: Optional[EmbeddingConfig] = None, onnx_path: Optional[str] = None
     ):
         """Initialize the optimized embedder.
 
@@ -55,9 +54,7 @@ class OptimizedEmbedder:
             print("Using cached ONNX model")
         else:
             model = ORTModelForSequenceClassification.from_pretrained(
-                self.config.model_name,
-                export=True,
-                opset=13
+                self.config.model_name, export=True, opset=13
             )
             model.save_pretrained(self.onnx_path)
             self.tokenizer.save_pretrained(self.onnx_path)
@@ -72,10 +69,16 @@ class OptimizedEmbedder:
             self._fallback_to_pytorch()
             return
 
-        providers = ['CUDAExecutionProvider'] if self.config.use_gpu else ['CPUExecutionProvider']
+        providers = (
+            ["CUDAExecutionProvider"]
+            if self.config.use_gpu
+            else ["CPUExecutionProvider"]
+        )
 
         session_options = ort.SessionOptions()
-        session_options.graph_optimization_level = ort.GraphOptimizationLevel.ORT_ENABLE_ALL
+        session_options.graph_optimization_level = (
+            ort.GraphOptimizationLevel.ORT_ENABLE_ALL
+        )
         session_options.enable_mem_pattern = True
         session_options.enable_cpu_mem_arena = True
 
@@ -85,9 +88,7 @@ class OptimizedEmbedder:
 
         print(f"Loading ONNX model from: {self.onnx_path}")
         self.session = ort.InferenceSession(
-            self.onnx_path,
-            session_options,
-            providers=providers
+            self.onnx_path, session_options, providers=providers
         )
 
         self.providers = self.session.get_providers()
@@ -136,7 +137,9 @@ class OptimizedEmbedder:
 
         return quantized
 
-    def dequantize_embeddings(self, quantized: np.ndarray, scale: float, zero_point: int) -> np.ndarray:
+    def dequantize_embeddings(
+        self, quantized: np.ndarray, scale: float, zero_point: int
+    ) -> np.ndarray:
         """Convert int8 embeddings back to FP32.
 
         Args:
@@ -163,7 +166,7 @@ class OptimizedEmbedder:
             padding=True,
             truncation=True,
             max_length=self.config.max_length,
-            return_tensors="np"
+            return_tensors="np",
         )
 
     def embed_batch(self, texts: List[str]) -> Tuple[np.ndarray, np.ndarray]:
@@ -183,20 +186,18 @@ class OptimizedEmbedder:
 
         inputs = self._tokenize_batch(texts)
 
-        if hasattr(self, 'session') and self.session is not None:
+        if hasattr(self, "session") and self.session is not None:
             input_ids = inputs["input_ids"].astype(np.int64)
             attention_mask = inputs["attention_mask"].astype(np.int64)
 
-            ort_inputs = {
-                "input_ids": input_ids,
-                "attention_mask": attention_mask
-            }
+            ort_inputs = {"input_ids": input_ids, "attention_mask": attention_mask}
 
             ort_outputs = self.session.run(None, ort_inputs)
             embeddings = ort_outputs[0][:, 0, :]
 
         else:
             import torch
+
             with torch.no_grad():
                 input_ids = torch.tensor(inputs["input_ids"]).to(self.device)
                 attention_mask = torch.tensor(inputs["attention_mask"]).to(self.device)
@@ -205,12 +206,18 @@ class OptimizedEmbedder:
                 embeddings = outputs.last_hidden_state[:, 0, :].cpu().numpy()
 
         elapsed = time.time() - start_time
-        print(f"   Batch ({batch_size}): {elapsed*1000:.1f}ms ({elapsed*1000/batch_size:.1f}ms per item)")
+        print(
+            f"   Batch ({batch_size}): {elapsed*1000:.1f}ms ({elapsed*1000/batch_size:.1f}ms per item)"
+        )
 
         if self.config.use_quantization:
             scales = np.zeros(len(texts))
             for i in range(len(texts)):
-                scales[i] = np.abs(embeddings[i]).max() if np.abs(embeddings[i]).max() > 0 else 1.0
+                scales[i] = (
+                    np.abs(embeddings[i]).max()
+                    if np.abs(embeddings[i]).max() > 0
+                    else 1.0
+                )
             embeddings = self.quantize_embeddings(embeddings)
         else:
             scales = np.array([])
@@ -239,8 +246,7 @@ class OptimizedEmbedder:
         print(f"Processing {len(texts)} texts in {n_batches} batches...")
 
         for i in range(0, len(texts), batch_size):
-            batch = texts[i:i + batch_size]
-            batch_num = i // batch_size + 1
+            batch = texts[i : i + batch_size]
 
             embeddings, scales = self.embed_batch(batch)
             all_embeddings.append(embeddings)
@@ -275,6 +281,7 @@ class OptimizedEmbedder:
     def get_memory_usage(self) -> dict:
         """Get memory usage information."""
         import psutil
+
         process = psutil.Process()
         return {
             "rss_mb": process.memory_info().rss / 1024 / 1024,
@@ -285,12 +292,7 @@ class OptimizedEmbedder:
 class FastFaissIndex:
     """Optimized FAISS index with quantization support."""
 
-    def __init__(
-        self,
-        dim: int = 768,
-        use_gpu: bool = False,
-        use_ivf: bool = False
-    ):
+    def __init__(self, dim: int = 768, use_gpu: bool = False, use_ivf: bool = False):
         """Initialize the FAISS index.
 
         Args:
@@ -306,7 +308,9 @@ class FastFaissIndex:
         if use_ivf and dim <= 1024:
             nlist = 100
             quantizer = faiss.IndexFlatIP(dim)
-            self.index = faiss.IndexIVFFlat(quantizer, dim, nlist, faiss.METRIC_INNER_PRODUCT)
+            self.index = faiss.IndexIVFFlat(
+                quantizer, dim, nlist, faiss.METRIC_INNER_PRODUCT
+            )
         else:
             self.index = faiss.IndexHNSWFlat(dim, 32, faiss.METRIC_INNER_PRODUCT)
 
@@ -316,7 +320,7 @@ class FastFaissIndex:
 
     def train(self, embeddings: np.ndarray):
         """Train the index (required for IVF)."""
-        if hasattr(self.index, 'train'):
+        if hasattr(self.index, "train"):
             self.index.train(embeddings.astype(np.float32))
             self.is_trained = True
 
@@ -347,10 +351,7 @@ class FastFaissIndex:
         return dequantized
 
     def search(
-        self,
-        query: np.ndarray,
-        k: int = 10,
-        nprobe: int = 10
+        self, query: np.ndarray, k: int = 10, nprobe: int = 10
     ) -> Tuple[np.ndarray, np.ndarray]:
         """Search for similar embeddings.
 
@@ -362,7 +363,7 @@ class FastFaissIndex:
         Args:
             Tuple of (scores, ids)
         """
-        if self.use_ivf and hasattr(self.index, 'nprobe'):
+        if self.use_ivf and hasattr(self.index, "nprobe"):
             self.index.nprobe = nprobe
 
         if query.dtype == np.int8:
@@ -382,14 +383,17 @@ class FastFaissIndex:
         faiss.write_index(self.index, f"{path}.faiss")
 
         with open(f"{path}.meta", "wb") as f:
-            pickle.dump({
-                "dim": self.dim,
-                "use_gpu": self.use_gpu,
-                "use_ivf": self.use_ivf,
-                "quantized_data": self.quantized_data,
-                "quantization_scales": self.quantization_scales,
-                "is_trained": self.is_trained
-            }, f)
+            pickle.dump(
+                {
+                    "dim": self.dim,
+                    "use_gpu": self.use_gpu,
+                    "use_ivf": self.use_ivf,
+                    "quantized_data": self.quantized_data,
+                    "quantization_scales": self.quantization_scales,
+                    "is_trained": self.is_trained,
+                },
+                f,
+            )
 
     def load(self, path: str):
         """Load the index from disk."""
@@ -421,6 +425,7 @@ class ParallelIndexer:
             n_workers: Number of workers (0 = auto)
         """
         import multiprocessing
+
         self.n_workers = n_workers or multiprocessing.cpu_count()
 
     def process_files(self, files: List[str]) -> List[dict]:
@@ -443,11 +448,13 @@ class ParallelIndexer:
         print(f"Processing {len(files)} files with {n_workers} workers...")
 
         with Pool(n_workers) as pool:
-            chunks = list(tqdm(
-                pool.imap(self._process_single_file, files),
-                total=len(files),
-                desc="Indexing"
-            ))
+            chunks = list(
+                tqdm(
+                    pool.imap(self._process_single_file, files),
+                    total=len(files),
+                    desc="Indexing",
+                )
+            )
 
         return [c for sublist in chunks for c in sublist]
 
@@ -473,14 +480,16 @@ class ParallelIndexer:
 
         result = []
         for chunk in chunks:
-            result.append({
-                "file_path": chunk.file_path,
-                "start_line": chunk.start_line,
-                "end_line": chunk.end_line,
-                "code": chunk.code,
-                "language": chunk.language,
-                "symbols": chunk.symbols
-            })
+            result.append(
+                {
+                    "file_path": chunk.file_path,
+                    "start_line": chunk.start_line,
+                    "end_line": chunk.end_line,
+                    "code": chunk.code,
+                    "language": chunk.language,
+                    "symbols": chunk.symbols,
+                }
+            )
 
         return result
 

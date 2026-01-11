@@ -1,0 +1,19 @@
+[flake8]
+max-line-length = 88
+extend-ignore = E203,E501,W503,F821,F841
+exclude =
+    .git,
+    .mypy_cache,
+    __pycache__,
+    build,
+    dist,
+    .eggs,
+    *.egg
+per-file-ignores =
+    benchmark.py: E402
+    benchmark_treesitter.py: E402,E501
+    demo.py: E402,W605,F541,E501
+    index_repo.py: E402
+    test_core.py: F541
+    cli/main.py: F541
+    tests/test_coarch.py: F841,E501

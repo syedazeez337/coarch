@@ -1,15 +1,29 @@
-"""FAISS vector index management."""
+"""FAISS vector index management with production-ready features."""
 
 import os
+import json
+import shutil
+import tempfile
+import threading
+from typing import List, Optional, Dict, Any
+from dataclasses import dataclass
+
 import faiss
 import numpy as np
-from typing import List, Optional, Tuple
-from dataclasses import dataclass
+
+from .logging_config import get_logger
+
+logger = get_logger(__name__)
+
+DEFAULT_DIM = 768
+DEFAULT_M = 32
+DEFAULT_EF_CONSTRUCTION = 200
 
 
 @dataclass
 class SearchResult:
     """A search result from the index."""
+
     id: int
     score: float
     file_path: str
@@ -20,156 +34,273 @@ class SearchResult:
 
 
 class FaissIndex:
-    """FAISS-based vector index for code embeddings."""
+    """FAISS-based vector index for code embeddings with thread safety."""
 
     def __init__(
         self,
-        dim: int = 768,
+        dim: int = DEFAULT_DIM,
         metric: str = "inner_product",
-        index_path: Optional[str] = None
+        index_path: Optional[str] = None,
+        use_ivf: bool = False,
+        nlist: int = 100,
     ):
-        """Initialize the FAISS index.
-
-        Args:
-            dim: Embedding dimension
-            metric: Distance metric ("inner_product", "l2", "hamming")
-            index_path: Path to load/save index
-        """
+        """Initialize the FAISS index."""
         self.dim = dim
         self.metric = metric
         self.index_path = index_path
+        self._lock_dict: Dict[str, threading.Lock] = {}
+        self._is_trained = True
 
         if metric == "inner_product":
-            self.index = faiss.IndexHNSWFlat(dim, 32, faiss.METRIC_INNER_PRODUCT)
+            metric_type = faiss.METRIC_INNER_PRODUCT
         elif metric == "l2":
-            self.index = faiss.IndexHNSWFlat(dim, 32, faiss.METRIC_L2)
+            metric_type = faiss.METRIC_L2
         else:
             raise ValueError(f"Unsupported metric: {metric}")
 
-        self.id_to_metadata = {}  # id -> metadata dict
+        if use_ivf and dim <= 1024:
+            quantizer = faiss.IndexFlatIP(dim)
+            self.index = faiss.IndexIVFFlat(quantizer, dim, nlist, metric_type)
+            self._is_trained = False
+            logger.info(f"Using IVF index with {nlist} partitions")
+        else:
+            self.index = faiss.IndexHNSWFlat(dim, DEFAULT_M, metric_type)
+            logger.info("Using HNSW index")
+
+        self.id_to_metadata: Dict[int, Dict] = {}
         self.next_id = 0
 
-        if index_path and os.path.exists(index_path):
+        if index_path and os.path.exists(f"{index_path}.faiss"):
             self.load(index_path)
 
-    def add(self, embeddings: np.ndarray, metadata: List[dict]) -> List[int]:
-        """Add embeddings to the index.
+    def _get_lock(self, key: str) -> threading.Lock:
+        """Get a lock for the given key."""
+        if key not in self._lock_dict:
+            self._lock_dict[key] = threading.Lock()
+        return self._lock_dict[key]
 
-        Args:
-            embeddings: numpy array of shape (n, dim)
-            metadata: List of metadata dicts for each embedding
+    def add(self, embeddings: np.ndarray, metadata: List[Dict]) -> List[int]:
+        """Add embeddings to the index."""
+        with self._get_lock("add"):
+            if len(embeddings) == 0:
+                logger.warning("Empty embeddings provided to add()")
+                return []
 
-        Returns:
-            List of assigned IDs
-        """
-        ids = list(range(self.next_id, self.next_id + len(embeddings)))
+            ids = list(range(self.next_id, self.next_id + len(embeddings)))
 
-        # Normalize for inner product (cosine similarity)
-        if self.metric == "inner_product":
-            faiss.normalize_L2(embeddings)
+            embeddings_copy = embeddings.copy()
 
-        self.index.add(embeddings.astype(np.float32))
+            if self.metric == "inner_product":
+                faiss.normalize_L2(embeddings_copy)
 
-        for id_, meta in zip(ids, metadata):
-            self.id_to_metadata[id_] = meta
+            try:
+                self.index.add(embeddings_copy.astype(np.float32))
+            except Exception as e:
+                logger.exception(f"Failed to add embeddings: {e}")
+                raise
 
-        self.next_id += len(embeddings)
-        return ids
+            for id_, meta in zip(ids, metadata):
+                self.id_to_metadata[id_] = meta
+
+            self.next_id += len(embeddings)
+
+            logger.info(f"Added {len(ids)} embeddings, total: {self.count()}")
+
+            return ids
 
     def search(
         self,
         query: np.ndarray,
         k: int = 10,
-        filter_ids: Optional[List[int]] = None
+        filter_ids: Optional[List[int]] = None,
+        nprobe: int = 10,
     ) -> List[SearchResult]:
-        """Search for similar embeddings.
+        """Search for similar embeddings."""
+        with self._get_lock("search"):
+            if self.count() == 0:
+                logger.warning("Search on empty index")
+                return []
 
-        Args:
-            query: Query embedding (dim,)
-            k: Number of results
-            filter_ids: Optional list of IDs to restrict search to
+            if self.metric == "inner_product":
+                query_copy = query.copy().reshape(1, -1)
+                faiss.normalize_L2(query_copy)
+            else:
+                query_copy = query.reshape(1, -1).astype(np.float32)
 
-        Returns:
-            List of SearchResult objects
-        """
-        if self.metric == "inner_product":
-            faiss.normalize_L2(query.reshape(1, -1))
+            if hasattr(self.index, "nprobe"):
+                self.index.nprobe = nprobe
 
-        scores, ids = self.index.search(query.reshape(1, -1).astype(np.float32), k)
+            try:
+                scores, ids = self.index.search(query_copy, k)
+            except Exception as e:
+                logger.exception(f"Search failed: {e}")
+                raise
 
-        results = []
-        for score, id_ in zip(scores[0], ids[0]):
-            if id_ < 0:  # FAISS returns -1 for padded results
-                break
-            if filter_ids and id_ not in filter_ids:
-                continue
+            results: List[SearchResult] = []
 
-            meta = self.id_to_metadata.get(id_, {})
-            results.append(SearchResult(
-                id=id_,
-                score=float(score),
-                file_path=meta.get("file_path", ""),
-                start_line=meta.get("start_line", 0),
-                end_line=meta.get("end_line", 0),
-                code=meta.get("code", ""),
-                language=meta.get("language", "")
-            ))
+            for score, id_ in zip(scores[0], ids[0]):
+                if id_ < 0:
+                    break
 
-        return results
+                if filter_ids and id_ not in filter_ids:
+                    continue
+
+                meta = self.id_to_metadata.get(id_, {})
+
+                results.append(
+                    SearchResult(
+                        id=id_,
+                        score=float(score),
+                        file_path=meta.get("file_path", ""),
+                        start_line=meta.get("start_line", 0),
+                        end_line=meta.get("end_line", 0),
+                        code=meta.get("code", ""),
+                        language=meta.get("language", ""),
+                    )
+                )
+
+            return results
+
+    def train(self, embeddings: np.ndarray) -> None:
+        """Train the index (required for IVF)."""
+        with self._get_lock("train"):
+            if not hasattr(self.index, "train"):
+                logger.debug("Index does not require training")
+                return
+
+            logger.info(f"Training index on {len(embeddings)} embeddings")
+
+            try:
+                self.index.train(embeddings.astype(np.float32))
+                self._is_trained = True
+                logger.info("Index training complete")
+            except Exception as e:
+                logger.exception(f"Training failed: {e}")
+                raise
 
     def save(self, path: Optional[str] = None) -> str:
-        """Save the index to disk.
+        """Save the index to disk atomically.
 
-        Args:
-            path: Optional path, uses index_path if not provided
-
-        Returns:
-            Path to saved index
+        Uses temporary files and atomic rename to prevent corruption
+        if the process crashes during save.
         """
-        save_path = path or self.index_path
-        if not save_path:
-            raise ValueError("No index path specified")
+        with self._get_lock("save"):
+            save_path = path or self.index_path
 
-        os.makedirs(os.path.dirname(save_path), exist_ok=True)
+            if not save_path:
+                raise ValueError("No index path specified")
 
-        # Save FAISS index
-        faiss.write_index(self.index, f"{save_path}.faiss")
+            save_dir = os.path.dirname(save_path)
+            if save_dir:
+                os.makedirs(save_dir, exist_ok=True)
 
-        # Save metadata
-        import json
-        with open(f"{save_path}.meta", "w") as f:
-            json.dump({
-                "id_to_metadata": self.id_to_metadata,
-                "next_id": self.next_id,
-                "dim": self.dim,
-                "metric": self.metric
-            }, f)
+            temp_dir = tempfile.mkdtemp(prefix="coarch_save_")
 
-        return save_path
+            try:
+                temp_faiss_path = os.path.join(temp_dir, "index.faiss")
+                temp_meta_path = os.path.join(temp_dir, "index.meta")
 
-    def load(self, path: str):
-        """Load the index from disk.
+                faiss.write_index(self.index, temp_faiss_path)
 
-        Args:
-            path: Path to the index (without extension)
-        """
-        self.index = faiss.read_index(f"{path}.faiss")
+                metadata = {
+                    "id_to_metadata": self.id_to_metadata,
+                    "next_id": self.next_id,
+                    "dim": self.dim,
+                    "metric": self.metric,
+                    "_is_trained": self._is_trained,
+                    "saved_at": json.dumps({"timestamp": __import__("time").time()}),
+                }
 
-        import json
-        with open(f"{path}.meta", "r") as f:
-            data = json.load(f)
-            self.id_to_metadata = data["id_to_metadata"]
-            self.next_id = data["next_id"]
-            self.dim = data["dim"]
-            self.metric = data["metric"]
+                with open(temp_meta_path, "w") as f:
+                    json.dump(metadata, f, indent=2)
+
+                final_faiss_path = f"{save_path}.faiss"
+                final_meta_path = f"{save_path}.meta"
+
+                shutil.move(temp_faiss_path, final_faiss_path)
+                shutil.move(temp_meta_path, final_meta_path)
+
+                logger.info(f"Index saved atomically to {save_path}")
+
+                return save_path
+
+            except Exception as e:
+                logger.exception(f"Failed to save index: {e}")
+                shutil.rmtree(temp_dir, ignore_errors=True)
+                raise
+
+    def load(self, path: str) -> None:
+        """Load the index from disk."""
+        with self._get_lock("load"):
+            faiss_path = f"{path}.faiss"
+            meta_path = f"{path}.meta"
+
+            if not os.path.exists(faiss_path):
+                logger.warning(f"FAISS index not found at {faiss_path}")
+                return
+
+            try:
+                self.index = faiss.read_index(faiss_path)
+            except Exception as e:
+                logger.exception(f"Failed to load FAISS index: {e}")
+                raise
+
+            if os.path.exists(meta_path):
+                try:
+                    with open(meta_path, "r") as f:
+                        data = json.load(f)
+                    self.id_to_metadata = data.get("id_to_metadata", {})
+                    self.next_id = data.get("next_id", 0)
+                    self.dim = data.get("dim", self.dim)
+                    self.metric = data.get("metric", self.metric)
+                    self._is_trained = data.get("_is_trained", True)
+                except Exception as e:
+                    logger.exception(f"Failed to load metadata: {e}")
+                    raise
+            else:
+                logger.warning(f"Metadata file not found at {meta_path}")
+                self.id_to_metadata = {}
+                self.next_id = 0
+                self._is_trained = True
+
+            logger.info(f"Index loaded from {path}")
 
     def count(self) -> int:
         """Return the number of embeddings in the index."""
-        return self.index.ntotal
+        try:
+            return self.index.ntotal
+        except Exception:
+            return 0
 
-    def clear(self):
+    def clear(self) -> None:
         """Clear the index."""
-        self.index = faiss.IndexHNSWFlat(self.dim, 32,
-            faiss.METRIC_INNER_PRODUCT if self.metric == "inner_product" else faiss.METRIC_L2)
-        self.id_to_metadata = {}
-        self.next_id = 0
+        with self._get_lock("clear"):
+            if self.metric == "inner_product":
+                metric_type = faiss.METRIC_INNER_PRODUCT
+            else:
+                metric_type = faiss.METRIC_L2
+
+            self.index = faiss.IndexHNSWFlat(self.dim, DEFAULT_M, metric_type)
+            self.id_to_metadata = {}
+            self.next_id = 0
+            self._is_trained = True
+
+            logger.info("Index cleared")
+
+    def get_status(self) -> Dict[str, Any]:
+        """Get index status information."""
+        return {
+            "count": self.count(),
+            "dim": self.dim,
+            "metric": self.metric,
+            "is_trained": self._is_trained,
+            "index_type": type(self.index).__name__,
+            "metadata_entries": len(self.id_to_metadata),
+        }
+
+    def __del__(self):
+        """Cleanup on deletion."""
+        try:
+            self._lock_dict.clear()
+        except Exception:
+            pass

@@ -4,14 +4,14 @@ import os
 import sys
 import time
 import re
-from pathlib import Path
+
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 print("=" * 70)
 print("Tree-sitter C Bindings Benchmark")
 print("=" * 70)
 
-SAMPLE_CODE = '''
+SAMPLE_CODE = """
 import os
 import sys
 from pathlib import Path
@@ -59,7 +59,7 @@ def main():
 
 if __name__ == "__main__":
     main()
-'''
+"""
 
 print("\n[1/3] Testing regex-based parser (baseline)")
 print("-" * 50)
@@ -74,7 +74,9 @@ regex_time = time.time() - start
 print(f"   Classes: {classes}")
 print(f"   Functions: {funcs}")
 print(f"   Imports: {imports}")
-print(f"   Time for 1000 iterations: {regex_time*1000:.1f}ms ({regex_time:.3f}ms per iteration)")
+print(
+    f"   Time for 1000 iterations: {regex_time*1000:.1f}ms ({regex_time:.3f}ms per iteration)"
+)
 
 print("\n[2/3] Testing Tree-sitter (if available)")
 print("-" * 50)
@@ -84,6 +86,7 @@ symbols_found = []
 
 try:
     import tree_sitter
+
     print("   Tree-sitter installed, testing parse...")
 
     parser = tree_sitter.Parser()
@@ -94,7 +97,9 @@ try:
         tree = parser.parse(bytes(SAMPLE_CODE, "utf-8"))
         ts_parse_time += time.time() - t_start
 
-    print(f"   Parse only time: {ts_parse_time*1000:.1f}ms ({ts_parse_time:.3f}ms per iteration)")
+    print(
+        f"   Parse only time: {ts_parse_time*1000:.1f}ms ({ts_parse_time:.3f}ms per iteration)"
+    )
     ts_time = ts_parse_time
 
 except ImportError:
@@ -113,7 +118,8 @@ print(f"   Tree-sitter (parse only): {ts_time*1000:7.1f}ms")
 print("\n" + "=" * 70)
 print("Benchmark Complete")
 print("=" * 70)
-print("""
+print(
+    """
 Summary:
    - Regex: ~0.007ms per iteration (full extraction)
    - Tree-sitter: ~0.003ms per iteration (parse only)
@@ -129,4 +135,5 @@ Note: Tree-sitter provides accurate AST parsing with:
 
 The regex fallback is fast and reliable for simple symbol extraction.
 For complex AST analysis, Tree-sitter C bindings are recommended.
-""")
+"""
+)

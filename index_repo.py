@@ -2,11 +2,10 @@
 
 import sys
 import os
+
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 from backend.indexer import RepositoryIndexer
-from backend.ast_analyzer import TreeSitterAnalyzer
-import sqlite3
 
 print("=" * 60)
 print("Indexing the Coarch repository...")
@@ -24,8 +23,8 @@ print(f"   Chunks created: {stats['chunks_created']}")
 
 db_stats = indexer.get_stats()
 print(f"\nTotal chunks in database: {db_stats['total_chunks']}")
-print(f"By language:")
-for lang, count in db_stats['by_language'].items():
+print("By language:")
+for lang, count in db_stats["by_language"].items():
     print(f"   - {lang}: {count}")
 
 chunks = indexer.get_chunks_for_embedding()
@@ -33,7 +32,9 @@ print(f"\nChunks ready for embedding: {len(chunks)}")
 
 print("\nSample chunks:")
 for chunk in chunks[:5]:
-    print(f"   [{chunk.language}] {chunk.file_path}:{chunk.start_line}-{chunk.end_line}")
+    print(
+        f"   [{chunk.language}] {chunk.file_path}:{chunk.start_line}-{chunk.end_line}"
+    )
     print(f"   Symbols: {chunk.symbols}")
     print()
 
