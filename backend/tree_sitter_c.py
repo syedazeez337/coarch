@@ -83,7 +83,7 @@ class TreeSitterCAnalyzer:
             import tree_sitter
             self.ts = tree_sitter
             self._use_native = True
-            print("[OK] Tree-sitter C bindings loaded")
+            print("[OK] Tree-sitter C bindings loaded (using regex fallback for symbols)")
         except ImportError:
             print("[WARN] Tree-sitter C bindings not available, using pure Python")
             self._init_pure_python()
