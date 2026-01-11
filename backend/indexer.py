@@ -112,9 +112,15 @@ class RepositoryIndexer:
         """)
 
         cursor.execute("""
-            CREATE INDEX IF NOT EXISTS idx_chunks_file ON chunks(file_path);
-            CREATE INDEX IF NOT EXISTS idx_chunks_language ON chunks(language);
-            CREATE INDEX IF NOT EXISTS idx_chunks_repo ON chunks(repo_id);
+            CREATE INDEX IF NOT EXISTS idx_chunks_file ON chunks(file_path)
+        """)
+
+        cursor.execute("""
+            CREATE INDEX IF NOT EXISTS idx_chunks_language ON chunks(language)
+        """)
+
+        cursor.execute("""
+            CREATE INDEX IF NOT EXISTS idx_chunks_repo ON chunks(repo_id)
         """)
 
         conn.commit()
