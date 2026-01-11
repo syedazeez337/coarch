@@ -1,0 +1,152 @@
+* {
+    box-sizing: border-box;
+}
+
+body {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, sans-serif;
+    margin: 0;
+    padding: 16px;
+    background-color: #1e1e1e;
+    color: #d4d4d4;
+}
+
+.container {
+    max-width: 800px;
+    margin: 0 auto;
+}
+
+.search-box {
+    display: flex;
+    gap: 8px;
+    margin-bottom: 16px;
+}
+
+#query {
+    flex: 1;
+    padding: 10px 14px;
+    border: 1px solid #3c3c3c;
+    border-radius: 4px;
+    background-color: #252526;
+    color: #d4d4d4;
+    font-size: 14px;
+}
+
+#query:focus {
+    outline: none;
+    border-color: #007acc;
+}
+
+#language {
+    padding: 10px 14px;
+    border: 1px solid #3c3c3c;
+    border-radius: 4px;
+    background-color: #252526;
+    color: #d4d4d4;
+    font-size: 14px;
+}
+
+#searchBtn {
+    padding: 10px 20px;
+    border: none;
+    border-radius: 4px;
+    background-color: #007acc;
+    color: white;
+    font-size: 14px;
+    cursor: pointer;
+    transition: background-color 0.2s;
+}
+
+#searchBtn:hover {
+    background-color: #005a9e;
+}
+
+.status {
+    padding: 8px 12px;
+    margin-bottom: 16px;
+    border-radius: 4px;
+    background-color: #2d2d2d;
+    font-size: 13px;
+    color: #9cdcfe;
+}
+
+.status.error {
+    background-color: #4a1a1a;
+    color: #f14c4c;
+}
+
+.result {
+    background-color: #252526;
+    border: 1px solid #3c3c3c;
+    border-radius: 4px;
+    margin-bottom: 12px;
+    overflow: hidden;
+}
+
+.result-header {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 8px 12px;
+    background-color: #2d2d2d;
+    border-bottom: 1px solid #3c3c3c;
+    font-size: 12px;
+}
+
+.file-path {
+    flex: 1;
+    color: #9cdcfe;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.lines {
+    color: #6a9955;
+}
+
+.score {
+    color: #ce9178;
+    font-weight: 500;
+}
+
+.code-preview {
+    margin: 0;
+    padding: 12px;
+    background-color: #1e1e1e;
+    overflow-x: auto;
+    font-family: 'Consolas', 'Monaco', 'Courier New', monospace;
+    font-size: 12px;
+    line-height: 1.5;
+    max-height: 200px;
+    overflow-y: auto;
+}
+
+.result-actions {
+    display: flex;
+    gap: 8px;
+    padding: 8px 12px;
+    border-top: 1px solid #3c3c3c;
+}
+
+.action-btn {
+    padding: 6px 12px;
+    border: 1px solid #3c3c3c;
+    border-radius: 3px;
+    background-color: #333333;
+    color: #d4d4d4;
+    font-size: 12px;
+    cursor: pointer;
+    transition: all 0.2s;
+}
+
+.action-btn:hover {
+    background-color: #3c3c3c;
+    border-color: #007acc;
+}
+
+.no-results {
+    text-align: center;
+    padding: 40px;
+    color: #6a9955;
+    font-size: 14px;
+}

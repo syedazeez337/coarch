@@ -1,0 +1,94 @@
+{
+  "name": "coarch-vscode",
+  "displayName": "Coarch Code Search",
+  "description": "Local-first semantic code search for VS Code",
+  "version": "0.1.0",
+  "publisher": "coarch",
+  "engines": {
+    "vscode": "^1.80.0"
+  },
+  "categories": [
+    "Other",
+    "Programming Languages"
+  ],
+  "keywords": [
+    "code search",
+    "semantic search",
+    "code navigation"
+  ],
+  "activationEvents": [
+    "onCommand:coarch.search",
+    "onCommand:coarch.indexRepo",
+    "onLanguage:python",
+    "onLanguage:javascript",
+    "onLanguage:typescript"
+  ],
+  "main": "./out/extension.js",
+  "contributes": {
+    "commands": [
+      {
+        "command": "coarch.search",
+        "title": "Coarch: Search Code",
+        "category": "Coarch"
+      },
+      {
+        "command": "coarch.searchSelection",
+        "title": "Coarch: Search Selected Code",
+        "category": "Coarch"
+      },
+      {
+        "command": "coarch.indexRepo",
+        "title": "Coarch: Index Repository",
+        "category": "Coarch"
+      },
+      {
+        "command": "coarch.status",
+        "title": "Coarch: Show Status",
+        "category": "Coarch"
+      }
+    ],
+    "configuration": {
+      "title": "Coarch",
+      "properties": {
+        "coarch.serverUrl": {
+          "type": "string",
+          "default": "http://localhost:8000",
+          "description": "URL of the Coarch server"
+        },
+        "coarch.autoIndex": {
+          "type": "boolean",
+          "default": true,
+          "description": "Automatically index repositories on open"
+        },
+        "coarch.maxResults": {
+          "type": "number",
+          "default": 20,
+          "description": "Maximum number of search results"
+        },
+        "coarch.showLineNumbers": {
+          "type": "boolean",
+          "default": true,
+          "description": "Show line numbers in search results"
+        }
+      }
+    }
+  },
+  "scripts": {
+    "vscode:prepublish": "npm run compile",
+    "compile": "tsc -p ./",
+    "watch": "tsc -watch -p ./",
+    "pretest": "npm run compile && npm run lint",
+    "lint": "eslint src --ext ts",
+    "test": "node ./out/test/runTest.js"
+  },
+  "devDependencies": {
+    "@types/vscode": "^1.80.0",
+    "@types/node": "16.x",
+    "@typescript-eslint/eslint-plugin": "^6.0.0",
+    "@typescript-eslint/parser": "^6.0.0",
+    "eslint": "^8.45.0",
+    "glob": "^10.3.0",
+    "mocha": "^10.2.0",
+    "typescript": "^5.0.0"
+  }
+}

@@ -31,7 +31,14 @@ class SearchRequest(BaseModel):
     query: str
     language: Optional[str] = None
     limit: int = 10
-    repo_id: Optional[int] = None
+    repo_ids: Optional[List[int]] = None
+
+
+class MultiSearchRequest(BaseModel):
+    query: str
+    repo_ids: Optional[List[int]] = None
+    language: Optional[str] = None
+    limit_per_repo: int = 5
 
 
 class SearchResult(BaseModel):
@@ -77,13 +84,10 @@ async def search(request: SearchRequest):
     """Search for similar code."""
     indexer, embedder, faiss = get_components()
 
-    # Get query embedding
     query_embedding = embedder.embed_query(request.query)
 
-    # Search FAISS
-    results = faiss.search(query_embedding, k=request.limit)
+    results = faiss.search(query_embedding, k=request.limit * 3)
 
-    # Filter by language if specified
     filtered = []
     for r in results:
         if request.language and r.language != request.language:
@@ -95,8 +99,48 @@ async def search(request: SearchRequest):
             score=r.score,
             language=r.language
         ))
+        if len(filtered) >= request.limit:
+            break
 
     return filtered
+
+
+@app.post("/search/multi", response_model=Dict[str, List[SearchResult]])
+async def multi_search(request: MultiSearchRequest):
+    """Search across multiple repositories."""
+    indexer, embedder, faiss = get_components()
+
+    query_embedding = embedder.embed_query(request.query)
+
+    results = faiss.search(query_embedding, k=request.limit_per_repo * 10)
+
+    repo_results = {}
+    for r in results:
+        if request.language and r.language != request.language:
+            continue
+
+        repo_path = r.file_path.split("/")[0] if "/" in r.file_path else r.file_path
+        if repo_path not in repo_results:
+            repo_results[repo_path] = []
+        if len(repo_results[repo_path]) < request.limit_per_repo:
+            repo_results[repo_path].append(SearchResult(
+                file_path=r.file_path,
+                lines=f"{r.start_line}-{r.end_line}",
+                code=r.code[:200] + "..." if len(r.code) > 200 else r.code,
+                score=r.score,
+                language=r.language
+            ))
+
+    return repo_results
+
+
+@app.get("/repos", response_model=List[Dict])
+async def list_repos():
+    """List all indexed repositories."""
+    indexer, _, _ = get_components()
+
+    stats = indexer.get_stats()
+    return stats.get("repos", [])
 
 
 @app.post("/index/repo", response_model=IndexResponse)
