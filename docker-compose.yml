@@ -1,0 +1,19 @@
+version: '3.8'
+
+services:
+  coarch:
+    build: .
+    ports:
+      - "8000:8000"
+    volumes:
+      - coarch_data:/data
+      - ./my_repos:/repos:ro
+    environment:
+      - COARCH_INDEX_PATH=/data/index
+      - COARCH_DB_PATH=/data/coarch.db
+      - COARCH_SERVER_HOST=0.0.0.0
+      - COARCH_SERVER_PORT=8000
+    restart: unless-stopped
+
+volumes:
+  coarch_data:

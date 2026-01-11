@@ -1,0 +1,466 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Coarch - Code Search Dashboard</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, sans-serif;
+            background-color: #1a1a2e;
+            color: #eee;
+            min-height: 100vh;
+        }
+
+        .header {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            padding: 20px 40px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+        }
+
+        .logo {
+            font-size: 24px;
+            font-weight: bold;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .logo-icon {
+            width: 32px;
+            height: 32px;
+            background: rgba(255,255,255,0.2);
+            border-radius: 8px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .stats {
+            display: flex;
+            gap: 30px;
+        }
+
+        .stat-item {
+            text-align: center;
+        }
+
+        .stat-value {
+            font-size: 24px;
+            font-weight: bold;
+        }
+
+        .stat-label {
+            font-size: 12px;
+            opacity: 0.8;
+        }
+
+        .main {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 40px 20px;
+        }
+
+        .search-section {
+            background: #16213e;
+            border-radius: 16px;
+            padding: 30px;
+            margin-bottom: 30px;
+        }
+
+        .search-box {
+            display: flex;
+            gap: 15px;
+            margin-bottom: 20px;
+        }
+
+        .search-input {
+            flex: 1;
+            padding: 15px 20px;
+            border: 2px solid #0f3460;
+            border-radius: 10px;
+            background: #0f3460;
+            color: #fff;
+            font-size: 16px;
+        }
+
+        .search-input:focus {
+            outline: none;
+            border-color: #667eea;
+        }
+
+        .search-btn {
+            padding: 15px 30px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            border: none;
+            border-radius: 10px;
+            color: #fff;
+            font-size: 16px;
+            cursor: pointer;
+            font-weight: bold;
+        }
+
+        .search-btn:hover {
+            opacity: 0.9;
+        }
+
+        .filters {
+            display: flex;
+            gap: 15px;
+            flex-wrap: wrap;
+        }
+
+        .filter-select {
+            padding: 10px 15px;
+            border: 2px solid #0f3460;
+            border-radius: 8px;
+            background: #0f3460;
+            color: #fff;
+            font-size: 14px;
+            cursor: pointer;
+        }
+
+        .results-section {
+            background: #16213e;
+            border-radius: 16px;
+            padding: 30px;
+        }
+
+        .results-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 20px;
+        }
+
+        .results-title {
+            font-size: 18px;
+            font-weight: bold;
+        }
+
+        .results-count {
+            color: #888;
+        }
+
+        .result-item {
+            background: #0f3460;
+            border-radius: 10px;
+            padding: 20px;
+            margin-bottom: 15px;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        .result-item:hover {
+            transform: translateX(5px);
+            background: #1a4a7a;
+        }
+
+        .result-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 10px;
+        }
+
+        .result-file {
+            color: #667eea;
+            font-weight: bold;
+        }
+
+        .result-meta {
+            display: flex;
+            gap: 15px;
+            font-size: 12px;
+            color: #888;
+        }
+
+        .result-score {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            padding: 3px 10px;
+            border-radius: 20px;
+            font-size: 12px;
+        }
+
+        .result-code {
+            font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', monospace;
+            font-size: 13px;
+            background: #1a1a2e;
+            padding: 15px;
+            border-radius: 8px;
+            overflow-x: auto;
+            line-height: 1.6;
+            color: #a8dadc;
+        }
+
+        .repos-section {
+            background: #16213e;
+            border-radius: 16px;
+            padding: 30px;
+            margin-top: 30px;
+        }
+
+        .repo-item {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 15px;
+            background: #0f3460;
+            border-radius: 8px;
+            margin-bottom: 10px;
+        }
+
+        .repo-name {
+            font-weight: bold;
+        }
+
+        .repo-path {
+            font-size: 12px;
+            color: #888;
+        }
+
+        .repo-actions {
+            display: flex;
+            gap: 10px;
+        }
+
+        .action-btn {
+            padding: 8px 15px;
+            border: none;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 13px;
+        }
+
+        .action-btn.primary {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: #fff;
+        }
+
+        .action-btn.danger {
+            background: #e94560;
+            color: #fff;
+        }
+
+        .loading {
+            text-align: center;
+            padding: 40px;
+            color: #888;
+        }
+
+        .spinner {
+            width: 40px;
+            height: 40px;
+            border: 4px solid #0f3460;
+            border-top-color: #667eea;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+            margin: 0 auto 20px;
+        }
+
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+
+        .empty-state {
+            text-align: center;
+            padding: 60px 20px;
+            color: #888;
+        }
+
+        .empty-state-icon {
+            font-size: 64px;
+            margin-bottom: 20px;
+        }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <div class="logo">
+            <div class="logo-icon">🔍</div>
+            Coarch
+        </div>
+        <div class="stats">
+            <div class="stat-item">
+                <div class="stat-value" id="vector-count">0</div>
+                <div class="stat-label">Vectors</div>
+            </div>
+            <div class="stat-item">
+                <div class="stat-value" id="repo-count">0</div>
+                <div class="stat-label">Repos</div>
+            </div>
+            <div class="stat-item">
+                <div class="stat-value" id="lang-count">0</div>
+                <div class="stat-label">Languages</div>
+            </div>
+        </div>
+    </div>
+
+    <div class="main">
+        <div class="search-section">
+            <div class="search-box">
+                <input type="text" class="search-input" id="search-input" placeholder="Search code semantically... e.g., 'function that parses JSON'">
+                <button class="search-btn" id="search-btn">Search</button>
+            </div>
+            <div class="filters">
+                <select class="filter-select" id="language-filter">
+                    <option value="">All Languages</option>
+                    <option value="python">Python</option>
+                    <option value="javascript">JavaScript</option>
+                    <option value="typescript">TypeScript</option>
+                    <option value="java">Java</option>
+                    <option value="cpp">C++</option>
+                    <option value="go">Go</option>
+                    <option value="rust">Rust</option>
+                </select>
+                <select class="filter-select" id="limit-filter">
+                    <option value="10">10 Results</option>
+                    <option value="20" selected>20 Results</option>
+                    <option value="50">50 Results</option>
+                    <option value="100">100 Results</option>
+                </select>
+            </div>
+        </div>
+
+        <div class="results-section">
+            <div class="results-header">
+                <div class="results-title">Search Results</div>
+                <div class="results-count" id="results-count">0 results</div>
+            </div>
+            <div id="results-container">
+                <div class="empty-state">
+                    <div class="empty-state-icon">🔎</div>
+                    <p>Enter a search query to find similar code</p>
+                </div>
+            </div>
+        </div>
+
+        <div class="repos-section">
+            <div class="results-header">
+                <div class="results-title">Indexed Repositories</div>
+                <button class="action-btn primary" id="add-repo-btn">+ Add Repository</button>
+            </div>
+            <div id="repos-container">
+                <div class="empty-state">
+                    <p>No repositories indexed yet</p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const API_BASE = 'http://localhost:8000';
+        let currentResults = [];
+
+        async function search() {
+            const query = document.getElementById('search-input').value;
+            const language = document.getElementById('language-filter').value;
+            const limit = document.getElementById('limit-filter').value;
+
+            if (!query.trim()) return;
+
+            const container = document.getElementById('results-container');
+            container.innerHTML = `
+                <div class="loading">
+                    <div class="spinner"></div>
+                    <p>Searching...</p>
+                </div>
+            `;
+
+            try {
+                const response = await fetch(`${API_BASE}/search`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ query, language, limit: parseInt(limit) })
+                });
+
+                const results = await response.json();
+                currentResults = results;
+                displayResults(results);
+            } catch (error) {
+                container.innerHTML = `
+                    <div class="empty-state">
+                        <p>Error: ${error.message}</p>
+                        <p>Make sure the Coarch server is running</p>
+                    </div>
+                `;
+            }
+        }
+
+        function displayResults(results) {
+            const container = document.getElementById('results-container');
+            document.getElementById('results-count').textContent = `${results.length} results`;
+
+            if (results.length === 0) {
+                container.innerHTML = `
+                    <div class="empty-state">
+                        <p>No results found</p>
+                    </div>
+                `;
+                return;
+            }
+
+            container.innerHTML = results.map((r, i) => `
+                <div class="result-item" onclick="openResult(${i})">
+                    <div class="result-header">
+                        <div class="result-file">${escapeHtml(r.file_path)}</div>
+                        <div class="result-meta">
+                            <span>${escapeHtml(r.lines)}</span>
+                            <span class="result-score">${(r.score * 100).toFixed(1)}%</span>
+                            <span>${escapeHtml(r.language)}</span>
+                        </div>
+                    </div>
+                    <pre class="result-code"><code>${escapeHtml(r.code)}</code></pre>
+                </div>
+            `).join('');
+        }
+
+        function openResult(index) {
+            const result = currentResults[index];
+            const lines = result.lines.split('-');
+            window.open(`vscode://file${result.file_path}:${lines[0]}`, '_blank');
+        }
+
+        async function loadStatus() {
+            try {
+                const response = await fetch(`${API_BASE}/index/status`);
+                const status = await response.json();
+
+                document.getElementById('vector-count').textContent =
+                    (status.stats?.vectors_indexed || 0).toLocaleString();
+
+                if (status.stats?.db_stats) {
+                    document.getElementById('repo-count').textContent =
+                        status.stats.db_stats.total_repos || 0;
+                    document.getElementById('lang-count').textContent =
+                        Object.keys(status.stats.db_stats.by_language || {}).length;
+                }
+            } catch (error) {
+                console.log('Server not running');
+            }
+        }
+
+        function escapeHtml(text) {
+            const div = document.createElement('div');
+            div.textContent = text;
+            return div.innerHTML;
+        }
+
+        document.getElementById('search-btn').addEventListener('click', search);
+        document.getElementById('search-input').addEventListener('keypress', (e) => {
+            if (e.key === 'Enter') search();
+        });
+
+        loadStatus();
+        setInterval(loadStatus, 5000);
+    </script>
+</body>
+</html>
