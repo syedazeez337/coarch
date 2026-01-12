@@ -58,7 +58,7 @@ symbol_start = time.time()
 
 chunks = indexer.get_chunks_for_embedding()
 symbols_found = {}
-files_by_lang = {}
+files_by_lang: dict[str, int] = {}
 
 for chunk in chunks:
     lang = chunk.language
