@@ -106,9 +106,15 @@ jobs:
     - name: Clean up disk space
       run: |
         df -h
-        docker system df
-        docker builder prune -af
-        docker image prune -af
+        echo "Removing Docker build cache..."
+        docker builder prune -af --filter "until=1h" || true
+        docker image prune -af --filter "until=168h" || true
+        docker container prune -f || true
+        docker volume prune -f || true
+        echo "Removing pip cache..."
+        pip cache purge || true
+        rm -rf /usr/local/lib/python3.10/__pycache__ || true
+        rm -rf /usr/local/lib/python3.10/distutils/__pycache__ || true
         df -h
 
     - name: Set up Docker Buildx
