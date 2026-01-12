@@ -25,6 +25,10 @@ extend-exclude = """
     | buck-out
     | build
     | dist
+    | benchmark_repo\\.py
+    | benchmark_rust\\.py
+    | benchmark_rust_vs_python\\.py
+    | live_demo\\.py
 )/
 """
 
