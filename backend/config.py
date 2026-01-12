@@ -2,7 +2,6 @@
 
 import os
 import json
-import hashlib
 import secrets
 from pathlib import Path
 from typing import Dict, Any, Optional, List
@@ -31,6 +30,13 @@ class CoarchConfig:
     server_host: str = "0.0.0.0"
     server_port: int = 8000
     watch_debounce_ms: int = 500
+    
+    # BM25 Hybrid Search Configuration
+    enable_bm25: bool = True
+    bm25_weight: float = 0.3
+    semantic_weight: float = 0.7
+    min_bm25_score_threshold: float = 0.01
+    bm25_chunk_limit: Optional[int] = None  # None for all chunks, or limit for large repos
     ignore_patterns: List[str] = field(
         default_factory=lambda: [
             ".git",
@@ -64,19 +70,16 @@ class CoarchConfig:
     max_file_size: int = 10 * 1024 * 1024  # 10MB
 
     def _hash_api_key(self, api_key: str) -> str:
-        """Hash an API key for secure storage."""
-        salt = hashlib.scrypt(
-            self.jwt_secret.encode(), salt=b"coarch_salt", n=16384, r=8, p=1
-        ).hex()[:32]
-        return hashlib.scrypt(
-            api_key.encode(), salt=salt.encode(), n=16384, r=8, p=1
-        ).hex()
+        """Hash an API key for secure storage using proper random salt."""
+        from .security import hash_api_key
+        return hash_api_key(api_key)
 
     def _verify_api_key(self, api_key: str) -> bool:
         """Verify an API key against its hash."""
         if not self.api_key_hash:
             return False
-        return secrets.compare_digest(self._hash_api_key(api_key), self.api_key_hash)
+        from .security import verify_api_key
+        return verify_api_key(api_key, self.api_key_hash)
 
     def set_api_key(self, api_key: str) -> None:
         """Set a new API key (will be hashed)."""
@@ -88,6 +91,9 @@ class CoarchConfig:
         if config_dir:
             Path(config_dir).mkdir(parents=True, exist_ok=True)
 
+        # SECURITY: Never persist secrets to disk
+        # jwt_secret and api_key_hash are intentionally excluded
+        # They must come from environment variables or be generated at runtime
         config_data = {
             "version": CONFIG_VERSION,
             "created_at": datetime.now().isoformat(),
@@ -113,10 +119,13 @@ class CoarchConfig:
             "cors_origins": self.cors_origins,
             "rate_limit_per_minute": self.rate_limit_per_minute,
             "enable_auth": self.enable_auth,
-            "api_key_hash": self.api_key_hash,
-            "jwt_secret": self.jwt_secret,
             "max_request_size": self.max_request_size,
             "max_file_size": self.max_file_size,
+            "enable_bm25": self.enable_bm25,
+            "bm25_weight": self.bm25_weight,
+            "semantic_weight": self.semantic_weight,
+            "min_bm25_score_threshold": self.min_bm25_score_threshold,
+            "bm25_chunk_limit": self.bm25_chunk_limit,
         }
 
         try:
@@ -138,7 +147,7 @@ class CoarchConfig:
         """Load config from file."""
         if not os.path.exists(path):
             logger.info(f"Config not found at {path}, using defaults")
-            return cls()
+            return cls._create_with_secure_secrets(enable_auth=False)
 
         try:
             with open(path, "r") as f:
@@ -146,7 +155,10 @@ class CoarchConfig:
 
             logger.info(f"Config loaded from {path}")
 
-            return cls(
+            enable_auth = data.get("enable_auth", False)
+
+            return cls._create_with_secure_secrets(
+                enable_auth=enable_auth,
                 index_path=data.get("index_path", "~/.coarch/index"),
                 db_path=data.get("db_path", "~/.coarch/coarch.db"),
                 model_name=data.get("model_name", "microsoft/codebert-base"),
@@ -167,16 +179,46 @@ class CoarchConfig:
                 log_level=data.get("log_level", "INFO"),
                 cors_origins=data.get("cors_origins", []),
                 rate_limit_per_minute=data.get("rate_limit_per_minute", 60),
-                enable_auth=data.get("enable_auth", False),
-                api_key_hash=data.get("api_key_hash"),
-                jwt_secret=data.get("jwt_secret", secrets.token_urlsafe(32)),
                 max_request_size=data.get("max_request_size", 10 * 1024 * 1024),
                 max_file_size=data.get("max_file_size", 10 * 1024 * 1024),
+                enable_bm25=data.get("enable_bm25", True),
+                bm25_weight=data.get("bm25_weight", 0.3),
+                semantic_weight=data.get("semantic_weight", 0.7),
+                min_bm25_score_threshold=data.get("min_bm25_score_threshold", 0.01),
+                bm25_chunk_limit=data.get("bm25_chunk_limit", None),
             )
         except Exception:
             logger.exception("Failed to load config")
             logger.warning("Using default config due to load error")
-            return cls()
+            return cls._create_with_secure_secrets(enable_auth=False)
+
+    @classmethod
+    def _create_with_secure_secrets(cls, enable_auth: bool, **kwargs) -> "CoarchConfig":
+        """Create config instance with secrets loaded from environment variables.
+
+        SECURITY: JWT secret must come from COARCH_JWT_SECRET environment variable.
+        If auth is enabled and no secret is provided, a random one is generated
+        with a warning that it will change on restart.
+        """
+        # Get JWT secret from environment variable only
+        jwt_secret = os.environ.get("COARCH_JWT_SECRET")
+
+        if enable_auth and not jwt_secret:
+            logger.warning(
+                "COARCH_JWT_SECRET not set - generating random secret "
+                "(will change on restart)"
+            )
+            jwt_secret = secrets.token_hex(32)
+        elif not jwt_secret:
+            # Auth disabled, still need a secret for internal use
+            jwt_secret = secrets.token_hex(32)
+
+        return cls(
+            enable_auth=enable_auth,
+            jwt_secret=jwt_secret,
+            api_key_hash=None,  # API key hash is never persisted, must be set via set_api_key()
+            **kwargs
+        )
 
     @staticmethod
     def get_default_config_path() -> str:

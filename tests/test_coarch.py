@@ -272,9 +272,9 @@ class TestASTAnalyzer(unittest.TestCase):
 
     def test_python_symbols(self):
         """Test Python symbol extraction."""
-        from backend.ast_analyzer import TreeSitterAnalyzer
+        from backend.ast_analyzer import RegexSymbolExtractor
 
-        analyzer = TreeSitterAnalyzer()
+        analyzer = RegexSymbolExtractor()
 
         code = '''
 def hello_world(name):
@@ -301,9 +301,9 @@ class Greeter:
 
     def test_javascript_symbols(self):
         """Test JavaScript symbol extraction."""
-        from backend.ast_analyzer import TreeSitterAnalyzer
+        from backend.ast_analyzer import RegexSymbolExtractor
 
-        analyzer = TreeSitterAnalyzer()
+        analyzer = RegexSymbolExtractor()
 
         code = """
 import React from "react";
@@ -335,9 +335,9 @@ class Button {
 
     def test_go_symbols(self):
         """Test Go symbol extraction."""
-        from backend.ast_analyzer import TreeSitterAnalyzer
+        from backend.ast_analyzer import RegexSymbolExtractor
 
-        analyzer = TreeSitterAnalyzer()
+        analyzer = RegexSymbolExtractor()
 
         code = """
 package main
@@ -368,9 +368,9 @@ func (p *Person) Greet() string {
 
     def test_complexity_calculation(self):
         """Test cyclomatic complexity calculation."""
-        from backend.ast_analyzer import TreeSitterAnalyzer
+        from backend.ast_analyzer import RegexSymbolExtractor
 
-        analyzer = TreeSitterAnalyzer()
+        analyzer = RegexSymbolExtractor()
 
         simple_code = "def foo(): pass"
         complex_code = """

@@ -1,4 +1,4 @@
-"""Tree-sitter based structural analysis for code chunks."""
+"""Regex-based symbol extraction for code chunks."""
 
 from pathlib import Path
 from typing import List, Optional
@@ -30,8 +30,8 @@ class StructuralInfo:
     complexity: int = 0
 
 
-class TreeSitterAnalyzer:
-    """Structural code analysis using Tree-sitter."""
+class RegexSymbolExtractor:
+    """Structural code analysis using regex patterns."""
 
     LANGUAGE_MAP = {
         "python": "python",

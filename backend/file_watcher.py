@@ -11,6 +11,20 @@ from queue import Queue, Empty
 
 from .logging_config import get_logger
 
+try:
+    from .signal_handler import (
+        GracefulKiller as SignalGracefulKiller,
+        check_shutdown_cancelled,
+    )
+    SIGNAL_HANDLER_AVAILABLE = True
+except ImportError:
+    # Fallback signal handler functions
+    class SignalGracefulKiller:
+        def __init__(self): self.cancelled = False
+        def check_cancelled(self): pass
+    def check_shutdown_cancelled(): return False
+    SIGNAL_HANDLER_AVAILABLE = False
+
 logger = get_logger(__name__)
 
 CHUNK_SIZE = 50
@@ -80,6 +94,9 @@ class FileWatcher:
         self._last_events: Dict[str, float] = {}
         self._file_hashes: Dict[str, str] = {}
         self._lock = threading.Lock()
+        
+        # Add graceful cancellation support
+        self._graceful_killer = SignalGracefulKiller()
 
     def start(self):
         """Start watching for changes."""
@@ -119,7 +136,7 @@ class FileWatcher:
 
     def _watch_loop(self):
         """Main watching loop."""
-        while self._running:
+        while self._running and not check_shutdown_cancelled():
             try:
                 events = self._scan_changes()
                 for event in events:
@@ -131,6 +148,8 @@ class FileWatcher:
             except Exception as e:
                 logger.exception(f"Error in watch loop: {e}")
                 time.sleep(1.0)
+        
+        logger.debug("File watcher loop exited due to shutdown signal")
 
     def _process_queue(self):
         """Process events from the queue."""
@@ -253,6 +272,17 @@ class IncrementalIndexer:
         self.pending_files: Set[str] = set()
         self._lock = threading.Lock()
         self._running = False
+        
+        # Add graceful cancellation support
+        self._graceful_killer = SignalGracefulKiller()
+        
+        # Make indexer cancellable
+        if SIGNAL_HANDLER_AVAILABLE:
+            try:
+                from .signal_handler import register_active_operation, unregister_active_operation
+                register_active_operation("incremental_indexer", self)
+            except:
+                pass
 
     def start(self):
         """Start incremental indexing."""
@@ -281,7 +311,7 @@ class IncrementalIndexer:
 
     def _process_loop(self):
         """Process pending file changes."""
-        while self._running:
+        while self._running and not check_shutdown_cancelled():
             try:
                 with self._lock:
                     files = list(self.pending_files)
@@ -294,6 +324,8 @@ class IncrementalIndexer:
             except Exception as e:
                 logger.exception(f"Error in process loop: {e}")
                 time.sleep(1.0)
+        
+        logger.debug("Incremental indexer loop exited due to shutdown signal")
 
     def _process_files(self, file_paths: List[str]):
         """Process a batch of changed files."""

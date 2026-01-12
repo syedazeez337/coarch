@@ -9,7 +9,7 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 from backend.hybrid_indexer import HybridIndexer
 from backend.faiss_index import FaissIndex
-from backend.ast_analyzer import TreeSitterAnalyzer
+from backend.ast_analyzer import RegexSymbolExtractor
 import tempfile
 
 print("=" * 70)
@@ -35,7 +35,7 @@ DB_PATH = os.path.join(temp_dir, "coarch.db")
 print(f"\n[1/4] Initializing Coarch...")
 indexer = HybridIndexer(db_path=DB_PATH)
 faiss = FaissIndex(index_path=INDEX_PATH)
-analyzer = TreeSitterAnalyzer()
+analyzer = RegexSymbolExtractor()
 
 print(f"   Index path: {INDEX_PATH}")
 print(f"   Database: {DB_PATH}")

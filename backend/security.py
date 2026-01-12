@@ -5,6 +5,8 @@ import re
 import time
 import hashlib
 import secrets
+import hmac
+import base64
 from pathlib import Path
 from typing import Optional, Set, Dict, Any
 from dataclasses import dataclass, field
@@ -290,14 +292,48 @@ def validate_request_size(
 
 
 def hash_api_key(api_key: str) -> str:
-    """Hash an API key for secure storage."""
-    salt = hashlib.sha256(api_key.encode()).hexdigest()[:32]
-    return hashlib.scrypt(api_key.encode(), salt=salt.encode(), n=16384, r=8, p=1).hex()
+    """Hash API key with random salt using scrypt.
+
+    Returns: base64-encoded string containing salt + hash
+    """
+    # Generate random salt (16 bytes)
+    salt = os.urandom(16)
+
+    # Hash with scrypt
+    key_hash = hashlib.scrypt(
+        api_key.encode(),
+        salt=salt,
+        n=16384,
+        r=8,
+        p=1,
+        dklen=32
+    )
+
+    # Return salt + hash as base64
+    return base64.b64encode(salt + key_hash).decode()
 
 
 def verify_api_key(api_key: str, stored_hash: str) -> bool:
-    """Verify an API key against its hash."""
-    return secrets.compare_digest(hash_api_key(api_key), stored_hash)
+    """Verify API key against stored hash."""
+    try:
+        decoded = base64.b64decode(stored_hash.encode())
+        salt = decoded[:16]
+        stored_key_hash = decoded[16:]
+
+        # Recompute hash with same salt
+        computed_hash = hashlib.scrypt(
+            api_key.encode(),
+            salt=salt,
+            n=16384,
+            r=8,
+            p=1,
+            dklen=32
+        )
+
+        # Constant-time comparison
+        return hmac.compare_digest(computed_hash, stored_key_hash)
+    except Exception:
+        return False
 
 
 def generate_api_key() -> str:

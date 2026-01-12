@@ -31,7 +31,7 @@ except ImportError as e:
 
 # Python indexer
 from backend.hybrid_indexer import HybridIndexer
-from backend.ast_analyzer import TreeSitterAnalyzer
+from backend.ast_analyzer import RegexSymbolExtractor
 
 print(f"\nRepository: {REPO_PATH}")
 print(f"Start time: {time.strftime('%Y-%m-%d %H:%M:%S')}")
@@ -84,7 +84,7 @@ python_start = time.time()
 
 temp_dir = tempfile.mkdtemp()
 python_indexer = HybridIndexer(db_path=os.path.join(temp_dir, "python.db"))
-analyzer = TreeSitterAnalyzer()
+analyzer = RegexSymbolExtractor()
 
 python_stats = python_indexer.index_repository(REPO_PATH, REPO_NAME)
 python_indexing_time = time.time() - python_start

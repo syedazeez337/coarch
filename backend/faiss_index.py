@@ -13,6 +13,75 @@ import numpy as np
 
 from .logging_config import get_logger
 
+try:
+    from .progress_tracker import (
+        track_progress,
+        create_faiss_progress_bar,
+        should_show_progress,
+        ProgressCallback,
+        ETAEstimator,
+    )
+except ImportError:
+    # Fallback if progress tracker is not available
+    def track_progress(operation_name, total_items=None, unit="items"):
+        class DummyProgress:
+            def __enter__(self):
+                return self
+            def __exit__(self, *args):
+                pass
+            def update(self, n=1):
+                pass
+            def set_description(self, desc):
+                pass
+            def set_postfix(self, **kwargs):
+                pass
+        return DummyProgress()
+
+    def create_faiss_progress_bar(total_vectors):
+        class DummyBar:
+            def __enter__(self):
+                return self
+            def __exit__(self, *args):
+                pass
+            def update(self, n=1):
+                pass
+            def set_description(self, desc):
+                pass
+            def set_postfix(self, **kwargs):
+                pass
+        return DummyBar()
+
+    def should_show_progress(total_items=None):
+        return total_items is not None and total_items > 100
+
+    class ProgressCallback:
+        def __init__(self, progress_bar, operation_name="Processing"):
+            self.progress_bar = progress_bar
+            self.operation_name = operation_name
+        def __call__(self, chunks_processed, total_chunks=None):
+            pass
+        def set_description(self, description):
+            if hasattr(self.progress_bar, 'set_description'):
+                self.progress_bar.set_description(description)
+        def set_postfix(self, **kwargs):
+            if hasattr(self.progress_bar, 'set_postfix'):
+                self.progress_bar.set_postfix(kwargs)
+        def close(self):
+            if hasattr(self.progress_bar, 'close'):
+                self.progress_bar.close()
+
+    class ETAEstimator:
+        def __init__(self, total_items):
+            self.total_items = total_items
+        def update(self, processed_items):
+            pass
+        def get_eta(self):
+            return None
+        def get_eta_string(self):
+            return "N/A"
+        def get_rate_string(self):
+            return "0 items/s"
+
 logger = get_logger(__name__)
 
 DEFAULT_DIM = 768
@@ -93,11 +162,28 @@ class FaissIndex:
             if self.metric == "inner_product":
                 faiss.normalize_L2(embeddings_copy)
 
-            try:
-                self.index.add(embeddings_copy.astype(np.float32))
-            except Exception as e:
-                logger.exception(f"Failed to add embeddings: {e}")
-                raise
+            # Add progress tracking for large batches
+            total_to_add = len(embeddings)
+            show_progress = should_show_progress(total_to_add)
+            
+            if show_progress:
+                with track_progress("Adding to FAISS index", total_to_add, "vectors") as progress:
+                    if progress:
+                        progress.set_description("Adding vectors to index")
+                    
+                    try:
+                        self.index.add(embeddings_copy.astype(np.float32))
+                        if progress:
+                            progress.update(total_to_add)
+                    except Exception as e:
+                        logger.exception(f"Failed to add embeddings: {e}")
+                        raise
+            else:
+                try:
+                    self.index.add(embeddings_copy.astype(np.float32))
+                except Exception as e:
+                    logger.exception(f"Failed to add embeddings: {e}")
+                    raise
 
             for id_, meta in zip(ids, metadata):
                 self.id_to_metadata[id_] = meta
@@ -170,13 +256,32 @@ class FaissIndex:
 
             logger.info(f"Training index on {len(embeddings)} embeddings")
 
-            try:
-                self.index.train(embeddings.astype(np.float32))
-                self._is_trained = True
-                logger.info("Index training complete")
-            except Exception as e:
-                logger.exception(f"Training failed: {e}")
-                raise
+            # Add progress tracking for training
+            show_progress = should_show_progress(len(embeddings))
+            
+            if show_progress:
+                with track_progress("Training FAISS index", len(embeddings), "samples") as progress:
+                    if progress:
+                        progress.set_description("Training index")
+                    
+                    try:
+                        self.index.train(embeddings.astype(np.float32))
+                        if progress:
+                            progress.update(len(embeddings))
+                        
+                        self._is_trained = True
+                        logger.info("Index training complete")
+                    except Exception as e:
+                        logger.exception(f"Training failed: {e}")
+                        raise
+            else:
+                try:
+                    self.index.train(embeddings.astype(np.float32))
+                    self._is_trained = True
+                    logger.info("Index training complete")
+                except Exception as e:
+                    logger.exception(f"Training failed: {e}")
+                    raise
 
     def save(self, path: Optional[str] = None) -> str:
         """Save the index to disk atomically.
@@ -249,7 +354,9 @@ class FaissIndex:
                 try:
                     with open(meta_path, "r") as f:
                         data = json.load(f)
-                    self.id_to_metadata = data.get("id_to_metadata", {})
+                    # Convert string keys back to integers (JSON converts int keys to strings)
+                    raw_metadata = data.get("id_to_metadata", {})
+                    self.id_to_metadata = {int(k): v for k, v in raw_metadata.items()}
                     self.next_id = data.get("next_id", 0)
                     self.dim = data.get("dim", self.dim)
                     self.metric = data.get("metric", self.metric)

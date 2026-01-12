@@ -52,7 +52,9 @@ impl RustIndexer {
         let repo_path = PathBuf::from(repo_path);
         let start = std::time::Instant::now();
         let files = self.scan_files_inner(&repo_path);
-        let chunks: Vec<CodeChunk> = files.par_iter().filter_map(|f| self.index_file(f, &repo_path)).collect();
+        let chunks: Vec<CodeChunk> = files.par_iter()
+            .flat_map(|f| self.index_file(f, &repo_path))
+            .collect();
         let elapsed = start.elapsed();
         
         Python::with_gil(|py| {
@@ -63,7 +65,7 @@ impl RustIndexer {
             result.set_item("parallel_workers", rayon::current_num_threads())?;
             let chunks_list: &PyList = PyList::new(py, std::iter::empty::<&str>());
             for chunk in chunks {
-                let safe_code = chunk.code.replace("\n", "\n").replace("|", "\\p");
+                let safe_code = chunk.code.replace("|", "\\p");
                 let symbols_str = chunk.symbols.iter().map(|s| format!("{}:{}", s.name, s.type_)).collect::<Vec<_>>().join(",");
                 let json = format!("{}|{}|{}|{}|{}|{}|{}", 
                     chunk.file_path, chunk.start_line, chunk.end_line, 
@@ -127,27 +129,56 @@ impl RustIndexer {
         files
     }
 
-    fn index_file(&self, file_path: &Path, repo_path: &Path) -> Option<CodeChunk> {
-        if file_path.metadata().ok()?.len() > MAX_FILE_SIZE as u64 { return None; }
-        let rel_path = file_path.strip_prefix(repo_path).unwrap_or(file_path).to_string_lossy().into_owned();
-        let content = fs::read_to_string(file_path).ok()?;
+    fn index_file(&self, file_path: &Path, repo_path: &Path) -> Vec<CodeChunk> {
+        // Check file size
+        let metadata = match file_path.metadata() {
+            Ok(m) => m,
+            Err(_) => return Vec::new(),
+        };
+        if metadata.len() > MAX_FILE_SIZE as u64 {
+            return Vec::new();
+        }
+
+        let rel_path = file_path.strip_prefix(repo_path)
+            .unwrap_or(file_path)
+            .to_string_lossy()
+            .into_owned();
+
+        let content = match fs::read_to_string(file_path) {
+            Ok(c) => c,
+            Err(_) => return Vec::new(),
+        };
+
         let language = self.detect_language(file_path);
         let symbols = self.extract_symbols(&content);
         let ast_hash = self.hash_code(&content);
         let lines: Vec<&str> = content.lines().collect();
-        let mut chunk = String::new();
-        let start = 1;
-        for (i, line) in lines.iter().enumerate() {
-            chunk.push_str(line);
-            chunk.push('\n');
-            if (i + 1) % CHUNK_SIZE == 0 {
-                let end = i + 1;
-                return Some(CodeChunk { file_path: rel_path, start_line: start, end_line: end, code: chunk, language: language.clone(), symbols: symbols.clone(), ast_hash: ast_hash.clone() });
+
+        let mut chunks = Vec::new();
+        let mut chunk_start = 0;
+
+        while chunk_start < lines.len() {
+            let chunk_end = std::cmp::min(chunk_start + CHUNK_SIZE, lines.len());
+            let chunk_lines = &lines[chunk_start..chunk_end];
+            let chunk_code: String = chunk_lines.join("\n");
+
+            if chunk_code.len() >= MIN_CHUNK_SIZE {
+                chunks.push(CodeChunk {
+                    file_path: rel_path.clone(),
+                    start_line: chunk_start + 1,
+                    end_line: chunk_end,
+                    code: chunk_code,
+                    language: language.clone(),
+                    symbols: symbols.clone(),
+                    ast_hash: ast_hash.clone(),
+                });
             }
+
+            // Move forward with overlap
+            chunk_start += CHUNK_SIZE - OVERLAP;
         }
-        if chunk.len() > MIN_CHUNK_SIZE {
-            Some(CodeChunk { file_path: rel_path, start_line: start, end_line: lines.len(), code: chunk, language, symbols, ast_hash })
-        } else { None }
+
+        chunks
     }
 
     fn detect_language(&self, path: &Path) -> String {

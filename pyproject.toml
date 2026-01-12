@@ -7,6 +7,16 @@ python_files = ["test_*.py", "*_test.py"]
 python_classes = ["Test*"]
 python_functions = ["test_*"]
 testpaths = ["tests"]
+markers = [
+    "cli: mark test as CLI-related",
+    "integration: mark test as integration test",
+    "slow: mark test as slow running",
+]
+addopts = [
+    "--tb=short",
+    "--strict-markers",
+    "--disable-warnings",
+]
 
 [tool.black]
 line-length = 88

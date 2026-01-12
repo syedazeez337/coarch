@@ -1,8 +1,10 @@
 """Production-ready FastAPI server for Coarch search."""
 
+import asyncio
 import os
 import time
 import uuid
+from concurrent.futures import ThreadPoolExecutor
 from contextlib import asynccontextmanager
 from typing import List, Optional, Dict, Any
 
@@ -15,6 +17,22 @@ from jose import JWTError, jwt
 import uvicorn
 
 from .logging_config import setup_logging, get_logger
+
+try:
+    from .signal_handler import (
+        register_cleanup_task,
+        register_active_operation,
+        unregister_active_operation,
+        get_shutdown_state,
+    )
+    SIGNAL_HANDLER_AVAILABLE = True
+except ImportError:
+    # Fallback signal handler functions
+    def register_cleanup_task(task): pass
+    def register_active_operation(op_id, operation): pass
+    def unregister_active_operation(op_id): pass
+    def get_shutdown_state(): return {}
+    SIGNAL_HANDLER_AVAILABLE = False
 from .security import (
     validate_path,
     sanitize_search_query,
@@ -30,6 +48,9 @@ logger = get_logger(__name__)
 
 security = HTTPBearer()
 
+# Thread pool executor for CPU-intensive operations
+_executor = ThreadPoolExecutor(max_workers=4)
+
 
 class AppState:
     """Application state container."""
@@ -41,6 +62,11 @@ class AppState:
         self.config = None
         self.rate_limiter = ThreadSafeRateLimiter(requests_per_minute=60)
         self.startup_complete = False
+        self.shutdown_event = None  # Set by signal handler
+        
+        # Register server as active operation for shutdown
+        if SIGNAL_HANDLER_AVAILABLE:
+            register_active_operation("server", self)
 
 
 @asynccontextmanager
@@ -48,10 +74,30 @@ async def lifespan(app: FastAPI):
     """Application lifespan handler with graceful shutdown."""
     logger.info("Starting Coarch server...")
     app.state.startup_complete = True
+    
+    # Set up shutdown event for signal handling
+    if SIGNAL_HANDLER_AVAILABLE:
+        import threading
+        app.state.shutdown_event = threading.Event()
+        
+        def cleanup_server():
+            """Cleanup function for server operation."""
+            logger.info("Cleaning up server resources")
+            if hasattr(app.state, 'shutdown_event'):
+                app.state.shutdown_event.set()
+        
+        register_cleanup_task(cleanup_server)
+    
     yield
     logger.info("Shutting down Coarch server...")
+    
+    # Signal shutdown to any waiting operations
     if hasattr(app.state, "shutdown_event"):
         app.state.shutdown_event.set()
+    
+    # Unregister server from active operations
+    if SIGNAL_HANDLER_AVAILABLE:
+        unregister_active_operation("server")
 
 
 app = FastAPI(
@@ -184,6 +230,10 @@ class SearchRequest(BaseModel):
     language: Optional[str] = None
     limit: int = Field(default=10, ge=1, le=100)
     repo_ids: Optional[List[int]] = None
+    use_bm25: bool = True
+    use_semantic: bool = True
+    bm25_weight: Optional[float] = None
+    semantic_weight: Optional[float] = None
 
 
 class MultiSearchRequest(BaseModel):
@@ -302,44 +352,133 @@ async def request_logging_middleware(request: Request, call_next):
     dependencies=[Depends(check_rate_limit)],
 )
 async def search(request: SearchRequest, req: Request):
-    """Search for similar code."""
+    """Search for similar code using hybrid BM25 + semantic search."""
     indexer, embedder, faiss = get_components()
+    config = get_config()
 
     sanitized_query = sanitize_search_query(request.query)
     if not sanitized_query:
         raise HTTPException(status_code=400, detail="Invalid search query")
 
-    logger.info(f"Searching for: {sanitized_query[:100]}...")
+    logger.info(f"Hybrid searching for: {sanitized_query[:100]}...")
 
-    query_embedding = embedder.embed_query(sanitized_query)
+    # Determine if we should use hybrid search
+    use_hybrid = config.enable_bm25 and (request.use_bm25 or request.use_semantic)
+    
+    if use_hybrid:
+        # Initialize hybrid search if not already done
+        if not hasattr(app.state, 'hybrid_search'):
+            try:
+                from .hybrid_search import HybridSearchManager
+                app.state.hybrid_search = HybridSearchManager({})
+                app.state.hybrid_search.initialize(
+                    config.db_path,
+                    config.index_path,
+                    config.bm25_weight,
+                    config.semantic_weight
+                )
+                app.state.hybrid_search.set_faiss_index(faiss)
+            except Exception as e:
+                logger.warning(f"Failed to initialize hybrid search: {e}, falling back to semantic")
+                use_hybrid = False
 
-    limit_multiplier = 3
-    results = faiss.search(query_embedding, k=request.limit * limit_multiplier)
-
-    filtered: List[SearchResult] = []
-    lang_filter = sanitize_language(request.language)
-
-    for r in results:
-        if lang_filter and r.language != lang_filter:
-            continue
-
-        code_preview = r.code[:200] + "..." if len(r.code) > 200 else r.code
-
-        filtered.append(
-            SearchResult(
-                file_path=r.file_path,
-                lines=f"{r.start_line}-{r.end_line}",
-                code=code_preview,
-                score=round(r.score, 4),
-                language=r.language,
+    if use_hybrid:
+        # Use hybrid search
+        bm25_weight = request.bm25_weight or config.bm25_weight
+        semantic_weight = request.semantic_weight or config.semantic_weight
+        
+        # Temporarily set weights
+        app.state.hybrid_search.set_weights(bm25_weight, semantic_weight)
+        
+        # Perform hybrid search
+        loop = asyncio.get_event_loop()
+        try:
+            # Generate query embedding in thread pool
+            query_embedding = await loop.run_in_executor(
+                _executor,
+                embedder.embed_query,
+                sanitized_query
             )
+            
+            # Set the embedding for semantic search
+            app.state.hybrid_search.hybrid_search.faiss_index = faiss
+            
+            # Perform hybrid search
+            results, explanation = await loop.run_in_executor(
+                _executor,
+                lambda: app.state.hybrid_search.search(
+                    sanitized_query,
+                    request.language,
+                    request.limit,
+                    request.use_bm25,
+                    request.use_semantic,
+                    False  # Don't return explanation for now
+                )
+            )
+            
+            # Convert to SearchResult format
+            filtered: List[SearchResult] = []
+            for r in results:
+                code_preview = r.code[:200] + "..." if len(r.code) > 200 else r.code
+                
+                filtered.append(
+                    SearchResult(
+                        file_path=r.file_path,
+                        lines=f"{r.start_line}-{r.end_line}",
+                        code=code_preview,
+                        score=round(r.score, 4),
+                        language=r.language,
+                    )
+                )
+            
+            logger.info(f"Hybrid search found {len(filtered)} results")
+            return filtered
+            
+        except Exception as e:
+            logger.error(f"Hybrid search failed: {e}, falling back to semantic")
+            use_hybrid = False
+
+    # Fallback to semantic-only search
+    if not use_hybrid:
+        # Run embedding generation in thread pool
+        loop = asyncio.get_event_loop()
+        query_embedding = await loop.run_in_executor(
+            _executor,
+            embedder.embed_query,
+            sanitized_query
         )
 
-        if len(filtered) >= request.limit:
-            break
+        # Run FAISS search in thread pool
+        limit_multiplier = 3
+        results = await loop.run_in_executor(
+            _executor,
+            lambda: faiss.search(query_embedding, k=request.limit * limit_multiplier)
+        )
 
-    logger.info(f"Found {len(filtered)} results for query")
-    return filtered
+        filtered: List[SearchResult] = []
+        lang_filter = sanitize_language(request.language)
+
+        for r in results:
+            if lang_filter and r.language != lang_filter:
+                continue
+
+            code_preview = r.code[:200] + "..." if len(r.code) > 200 else r.code
+
+            filtered.append(
+                SearchResult(
+                    file_path=r.file_path,
+                    lines=f"{r.start_line}-{r.end_line}",
+                    code=code_preview,
+                    score=round(r.score, 4),
+                    language=r.language,
+                )
+            )
+
+            if len(filtered) >= request.limit:
+                break
+
+        logger.info(f"Semantic search found {len(filtered)} results")
+        return filtered
 
 
 @app.post(
@@ -348,15 +487,25 @@ async def search(request: SearchRequest, req: Request):
     dependencies=[Depends(check_rate_limit)],
 )
 async def multi_search(request: MultiSearchRequest):
-    """Search across multiple repositories."""
+    """Search across multiple repositories - runs CPU-bound ops in thread pool."""
     indexer, embedder, faiss = get_components()
 
     sanitized_query = sanitize_search_query(request.query)
 
-    query_embedding = embedder.embed_query(sanitized_query)
+    # Run embedding generation in thread pool
+    loop = asyncio.get_event_loop()
+    query_embedding = await loop.run_in_executor(
+        _executor,
+        embedder.embed_query,
+        sanitized_query
+    )
 
+    # Run FAISS search in thread pool
     limit_multiplier = 10
-    results = faiss.search(query_embedding, k=request.limit_per_repo * limit_multiplier)
+    results = await loop.run_in_executor(
+        _executor,
+        lambda: faiss.search(query_embedding, k=request.limit_per_repo * limit_multiplier)
+    )
 
     repo_results: Dict[str, List[SearchResult]] = {}
     lang_filter = sanitize_language(request.language)
@@ -412,7 +561,7 @@ async def index_repo(request: IndexRequest, background_tasks: BackgroundTasks):
 
     stats = indexer.index_repository(validated_path, request.name)
 
-    def process_embeddings():
+    async def process_embeddings():
         """Process embeddings in background with job tracking."""
         job = GLOBAL_JOB_MANAGER.get_job(job_id)
         if job:
@@ -432,7 +581,14 @@ async def index_repo(request: IndexRequest, background_tasks: BackgroundTasks):
             processed = 0
 
             code_texts = [chunk.code for chunk in chunks]
-            embeddings = embedder.embed(code_texts)
+            
+            # Run embedding generation in thread pool
+            loop = asyncio.get_event_loop()
+            embeddings = await loop.run_in_executor(
+                _executor,
+                embedder.embed,
+                code_texts
+            )
 
             for i, chunk in enumerate(chunks):
                 if job:
@@ -450,8 +606,9 @@ async def index_repo(request: IndexRequest, background_tasks: BackgroundTasks):
                 for chunk in chunks
             ]
 
-            faiss.add(embeddings, metadata)
-            faiss.save()
+            # Run FAISS operations in thread pool
+            await loop.run_in_executor(_executor, faiss.add, embeddings, metadata)
+            await loop.run_in_executor(_executor, faiss.save)
 
             GLOBAL_JOB_MANAGER.complete_job(job_id, True)
             logger.info(f"Indexed {len(chunks)} chunks")

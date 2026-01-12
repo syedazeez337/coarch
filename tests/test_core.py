@@ -59,9 +59,9 @@ except Exception as e:
 
 print("\n[3/5] Testing AST analyzer...")
 try:
-    from backend.ast_analyzer import TreeSitterAnalyzer
+    from backend.ast_analyzer import RegexSymbolExtractor
 
-    analyzer = TreeSitterAnalyzer()
+    analyzer = RegexSymbolExtractor()
 
     python_code = """
 def hello_world(name):

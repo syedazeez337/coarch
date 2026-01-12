@@ -466,10 +466,10 @@ class ParallelIndexer:
     def _process_single_file(self, file_path: str) -> List[dict]:
         """Process a single file."""
         from backend.hybrid_indexer import HybridIndexer
-        from backend.ast_analyzer import TreeSitterAnalyzer
+        from backend.ast_analyzer import RegexSymbolExtractor
 
         indexer = HybridIndexer(db_path=":memory:")
-        analyzer = TreeSitterAnalyzer()
+        analyzer = RegexSymbolExtractor()
 
         try:
             with open(file_path, "r", encoding="utf-8", errors="ignore") as f:

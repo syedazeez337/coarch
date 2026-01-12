@@ -65,6 +65,18 @@ jobs:
       run: |
         python -m pytest tests/ -v --cov=backend --cov-report=xml --cov-report=term-missing -W ignore::DeprecationWarning
 
+    - name: Run CLI integration tests
+      run: |
+        python -m pytest tests/test_cli_integration.py -v --tb=short
+
+    - name: Run smoke tests
+      run: |
+        python tests/smoke_tests.py
+
+    - name: Run performance benchmarks
+      run: |
+        python tests/perf_benchmarks.py
+
     - name: Upload coverage
       uses: codecov/codecov-action@v3
       with:

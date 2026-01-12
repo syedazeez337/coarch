@@ -16,6 +16,45 @@ except ImportError:
 
 from .logging_config import get_logger
 
+try:
+    from .progress_tracker import (
+        track_progress,
+        create_deletion_progress_bar,
+        should_show_progress,
+    )
+except ImportError:
+    # Fallback if progress tracker is not available
+    def track_progress(operation_name, total_items=None, unit="items"):
+        class DummyProgress:
+            def __enter__(self):
+                return self
+            def __exit__(self, *args):
+                pass
+            def update(self, n=1):
+                pass
+            def set_description(self, desc):
+                pass
+            def set_postfix(self, **kwargs):
+                pass
+        return DummyProgress()
+
+    def create_deletion_progress_bar(total_chunks):
+        class DummyBar:
+            def __enter__(self):
+                return self
+            def __exit__(self, *args):
+                pass
+            def update(self, n=1):
+                pass
+            def set_description(self, desc):
+                pass
+            def set_postfix(self, **kwargs):
+                pass
+        return DummyBar()
+
+    def should_show_progress(total_items=None):
+        return total_items is not None and total_items > 20
+
 logger = get_logger(__name__)
 
 
@@ -244,11 +283,31 @@ class HybridIndexer:
         """Delete a repository and its chunks."""
         with self.get_connection() as conn:
             cursor = conn.cursor()
-            cursor.execute("DELETE FROM chunks WHERE repo_id = ?", (repo_id,))
-            chunks_deleted = cursor.rowcount
+            
+            # First get count of chunks to be deleted for progress tracking
+            cursor.execute("SELECT COUNT(*) FROM chunks WHERE repo_id = ?", (repo_id,))
+            chunks_to_delete = cursor.fetchone()[0]
+            
+            # Delete chunks with progress tracking
+            if should_show_progress(chunks_to_delete):
+                with track_progress("Deleting repository", chunks_to_delete, "chunks") as progress:
+                    if progress:
+                        progress.set_description("Deleting chunks")
+                    
+                    cursor.execute("DELETE FROM chunks WHERE repo_id = ?", (repo_id,))
+                    chunks_deleted = cursor.rowcount
+                    
+                    if progress:
+                        progress.update(chunks_deleted)
+            else:
+                cursor.execute("DELETE FROM chunks WHERE repo_id = ?", (repo_id,))
+                chunks_deleted = cursor.rowcount
+            
             cursor.execute("DELETE FROM repos WHERE id = ?", (repo_id,))
             repos_deleted = cursor.rowcount
-            return repos_deleted
+            
+            logger.info(f"Deleted repository {repo_id}: {chunks_deleted} chunks")
+            return chunks_deleted
 
     def search(self, query: str, limit: int = 10) -> List[Dict]:
         """Search chunks by query."""
