@@ -2,6 +2,7 @@
 
 import sys
 import os
+
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 import numpy as np
@@ -33,7 +34,7 @@ sample_chunks = [
         "id": 2,
         "file": "src/auth.py",
         "lang": "python",
-        "code": '''class AuthService:
+        "code": """class AuthService:
     def __init__(self, db_connection):
         self.db = db_connection
 
@@ -41,7 +42,7 @@ sample_chunks = [
         user = self.db.find_user(email)
         if user and user.check_password(password):
             return jwt.encode({"sub": user.id})
-        raise AuthError("Invalid credentials")''',
+        raise AuthError("Invalid credentials")""",
         "symbols": ["AuthService", "login"],
     },
     {
@@ -62,20 +63,20 @@ sample_chunks = [
         "id": 4,
         "file": "src/parser.py",
         "lang": "python",
-        "code": '''class JSONParser:
+        "code": """class JSONParser:
     def __init__(self, strict_mode=False):
         self.strict = strict_mode
 
     def parse(self, data):
         import json
-        return json.loads(data) if data else {}''',
+        return json.loads(data) if data else {}""",
         "symbols": ["JSONParser", "parse"],
     },
     {
         "id": 5,
         "file": "lib/utils.js",
         "lang": "javascript",
-        "code": '''function formatDate(date) {
+        "code": """function formatDate(date) {
     return new Date(date).toISOString();
 }
 
@@ -84,14 +85,14 @@ function validateEmail(email) {
     return re.test(email);
 }
 
-module.exports = { formatDate, validateEmail };''',
+module.exports = { formatDate, validateEmail };""",
         "symbols": ["formatDate", "validateEmail"],
     },
     {
         "id": 6,
         "file": "src/database.py",
         "lang": "python",
-        "code": '''class Database:
+        "code": """class Database:
     def __init__(self, connection_string):
         self.conn = connection_string
 
@@ -102,17 +103,20 @@ module.exports = { formatDate, validateEmail };''',
         with self.connect() as conn:
             cur = conn.cursor()
             cur.execute(sql, args)
-            return cur.fetchall()''',
+            return cur.fetchall()""",
         "symbols": ["Database", "connect", "query"],
     },
 ]
 
+
 def simulate_embedding(text):
     """Simulate embedding using a simple hash-based approach."""
     import hashlib
+
     hash_val = int(hashlib.md5(text.encode()).hexdigest(), 16)
     np.random.seed(hash_val % (2**31))
     return np.random.random(DIM).astype(np.float32)
+
 
 print("\n[1/4] Creating semantic index...")
 print(f"   Sample chunks: {len(sample_chunks)}")
@@ -168,23 +172,19 @@ print("\n[4/4] Example API usage...")
 
 api_example = {
     "endpoint": "POST /search",
-    "request": {
-        "query": "authentication function",
-        "language": "python",
-        "limit": 10
-    },
+    "request": {"query": "authentication function", "language": "python", "limit": 10},
     "response": {
         "results": [
             {
                 "file": "src/auth.py",
                 "score": 0.892,
                 "code": "def authenticate_user(username, password):...",
-                "symbols": ["authenticate_user"]
+                "symbols": ["authenticate_user"],
             }
         ],
         "total": 1,
-        "query_time_ms": 12.5
-    }
+        "query_time_ms": 12.5,
+    },
 }
 
 print(f"\n   {json.dumps(api_example, indent=2)}")
@@ -197,5 +197,5 @@ print("   1. pip install -r requirements.txt")
 print("   2. coarch init")
 print("   3. coarch index /path/to/your/repo")
 print("   4. coarch serve")
-print("   5. curl -X POST http://localhost:8000/search -d '{\"query\": \"...\"}'")
+print('   5. curl -X POST http://localhost:8000/search -d \'{"query": "..."}\'')
 print("=" * 70)

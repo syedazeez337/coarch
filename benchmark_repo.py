@@ -49,7 +49,7 @@ print(f"   Files indexed: {stats['files_indexed']}")
 print(f"   Chunks created: {stats['chunks_created']}")
 print(f"   Scan time: {scan_time:.2f}s")
 
-if stats['files_indexed'] == 0:
+if stats["files_indexed"] == 0:
     print("\nNo files indexed. Check repository path and permissions.")
     sys.exit(1)
 
@@ -63,7 +63,7 @@ files_by_lang = {}
 for chunk in chunks:
     lang = chunk.language
     files_by_lang[lang] = files_by_lang.get(lang, 0) + 1
-    
+
     try:
         symbols = analyzer.extract_symbols(chunk.code, lang)
         for sym in symbols:
@@ -97,7 +97,7 @@ print(f"   {'Symbols extracted':<30} {sum(symbols_found.values()):>15,}")
 print(f"   {'Total time':<30} {total_time:>14.2f}s")
 print(f"   {'Files/second':<30} {stats['files_indexed']/total_time:>14.1f}")
 
-if stats['chunks_created'] > 0:
+if stats["chunks_created"] > 0:
     print(f"   {'Chunks/second':<30} {stats['chunks_created']/total_time:>14.1f}")
 
 print(f"\n   Database stats:")

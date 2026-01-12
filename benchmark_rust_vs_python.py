@@ -22,6 +22,7 @@ REPO_NAME = "FAISS"
 rust_available = False
 try:
     from backend.coarch_rust import RustIndexer
+
     rust_available = True
     print("\n✓ Rust module loaded successfully")
 except ImportError as e:
@@ -41,32 +42,34 @@ if rust_available:
     print("\n" + "=" * 70)
     print("RUST INDEXER (Parallel + Rayon)")
     print("=" * 70)
-    
+
     rust_start = time.time()
-    
+
     temp_dir = tempfile.mkdtemp()
     rust_indexer = RustIndexer(
         index_path=os.path.join(temp_dir, "rust_index"),
         db_path=os.path.join(temp_dir, "rust.db"),
     )
-    
+
     rust_stats_py = rust_indexer.index_directory(REPO_PATH, REPO_NAME)
     rust_indexing_time = time.time() - rust_start
-    
+
     # Convert to dict
     rust_chunk_count = rust_indexer.get_chunk_count()
-    
+
     print(f"\n   Indexing time: {rust_indexing_time:.3f}s")
     print(f"   Files indexed: {rust_stats_py.get('files_indexed', 'N/A')}")
     print(f"   Chunks created: {rust_chunk_count}")
-    print(f"   Throughput: {rust_stats_py.get('files_indexed', 1) / rust_indexing_time:.1f} files/s")
-    
+    print(
+        f"   Throughput: {rust_stats_py.get('files_indexed', 1) / rust_indexing_time:.1f} files/s"
+    )
+
     # Test search
     search_start = time.time()
     for query in ["authentication function", "database connection", "search algorithm"]:
         results = rust_indexer.search(query, 5)
     rust_search_time = (time.time() - search_start) / 3
-    
+
     print(f"\n   Average search time: {rust_search_time*1000:.2f}ms")
     print(f"   Search results sample:")
     for r in rust_indexer.search("indexing", 3)[:1]:
@@ -92,7 +95,9 @@ python_chunk_count = len(python_chunks)
 print(f"\n   Indexing time: {python_indexing_time:.3f}s")
 print(f"   Files indexed: {python_stats['files_indexed']}")
 print(f"   Chunks created: {python_chunk_count}")
-print(f"   Throughput: {python_stats['files_indexed'] / python_indexing_time:.1f} files/s")
+print(
+    f"   Throughput: {python_stats['files_indexed'] / python_indexing_time:.1f} files/s"
+)
 
 # ===== COMPARISON =====
 print("\n" + "=" * 70)
@@ -101,14 +106,22 @@ print("=" * 70)
 
 if rust_available and python_stats:
     speedup = python_indexing_time / rust_indexing_time if rust_indexing_time > 0 else 0
-    
+
     print(f"\n{'Metric':<30} {'Python':>15} {'Rust':>15} {'Speedup':>15}")
     print("-" * 75)
-    print(f"{'Files indexed':<30} {python_stats['files_indexed']:>15} {rust_stats_py.get('files_indexed', 'N/A'):>15} {'-':>15}")
-    print(f"{'Chunks created':<30} {python_chunk_count:>15} {rust_chunk_count:>15} {'-':>15}")
-    print(f"{'Indexing time (s)':<30} {python_indexing_time:>15.3f} {rust_indexing_time:>15.3f} {speedup:>14.1f}x")
-    print(f"{'Files/second':<30} {python_stats['files_indexed']/python_indexing_time:>15.1f} {rust_stats_py.get('files_indexed', 1)/rust_indexing_time:>15.1f} {speedup:>14.1f}x")
-    
+    print(
+        f"{'Files indexed':<30} {python_stats['files_indexed']:>15} {rust_stats_py.get('files_indexed', 'N/A'):>15} {'-':>15}"
+    )
+    print(
+        f"{'Chunks created':<30} {python_chunk_count:>15} {rust_chunk_count:>15} {'-':>15}"
+    )
+    print(
+        f"{'Indexing time (s)':<30} {python_indexing_time:>15.3f} {rust_indexing_time:>15.3f} {speedup:>14.1f}x"
+    )
+    print(
+        f"{'Files/second':<30} {python_stats['files_indexed']/python_indexing_time:>15.1f} {rust_stats_py.get('files_indexed', 1)/rust_indexing_time:>15.1f} {speedup:>14.1f}x"
+    )
+
     print(f"\n{'='*70}")
     if speedup > 1:
         print(f"✓ Rust is {speedup:.1f}x FASTER than Python!")
@@ -122,7 +135,8 @@ print("\n" + "=" * 70)
 print("KEY INSIGHTS")
 print("=" * 70)
 if rust_available:
-    print(f"""
+    print(
+        f"""
 • Rust indexing: {rust_indexing_time*1000:.0f}ms for {rust_stats_py.get('files_indexed', 'N/A')} files
 • Python indexing: {python_indexing_time*1000:.0f}ms for {python_stats['files_indexed']} files
 • Speedup: {speedup:.1f}x with Rust
@@ -137,5 +151,6 @@ if rust_available:
   - Tree-sitter integration for accurate AST parsing
   - Easier debugging and development
   - Rich ecosystem of NLP libraries
-""")
+"""
+    )
 print("=" * 70)
