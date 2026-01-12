@@ -63,7 +63,7 @@ app = FastAPI(
     redoc_url="/api/redoc",
 )
 
-app.state = AppState()
+app.state = AppState()  # type: ignore[assignment]
 
 
 ALLOWED_ORIGINS = os.environ.get(

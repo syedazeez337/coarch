@@ -302,7 +302,7 @@ class ConfigManager:
                 current = getattr(self.config, config_key)
 
                 if isinstance(current, bool):
-                    new_value = value.lower() in ("true", "1", "yes")
+                    new_value: Any = value.lower() in ("true", "1", "yes")
                 elif isinstance(current, int):
                     try:
                         new_value = int(value)

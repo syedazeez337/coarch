@@ -551,10 +551,10 @@ class TreeSitterAnalyzer:
     ) -> StructuralInfo:
         """Extract structural info for a specific chunk."""
         language = self.get_language(file_path)
-        symbols = self.extract_symbols(code, language)
+        symbols = self.extract_symbols(code, language or "")
 
         imports = [s.name for s in symbols if s.type == "import"]
-        function_calls = self._extract_function_calls(code, language)
+        function_calls = self._extract_function_calls(code, language or "")
 
         import hashlib
 

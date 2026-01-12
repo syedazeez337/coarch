@@ -304,6 +304,7 @@ class FastFaissIndex:
 
         self.dim = dim
         self.use_gpu = use_gpu
+        self.use_ivf = use_ivf
 
         if use_ivf and dim <= 1024:
             nlist = 100
@@ -331,6 +332,8 @@ class FastFaissIndex:
             embeddings: FP32 or int8 embeddings
             scales: Quantization scales (if embeddings are quantized)
         """
+        import faiss
+
         if embeddings.dtype == np.int8:
             self.quantized_data = embeddings
             self.quantization_scales = scales
@@ -363,6 +366,8 @@ class FastFaissIndex:
         Args:
             Tuple of (scores, ids)
         """
+        import faiss
+
         if self.use_ivf and hasattr(self.index, "nprobe"):
             self.index.nprobe = nprobe
 

@@ -4,7 +4,7 @@ import logging
 import sys
 import os
 from pathlib import Path
-from typing import Optional
+from typing import Optional, Union
 from datetime import datetime
 import json
 
@@ -82,7 +82,9 @@ def setup_logging(
     root_logger.handlers.clear()
 
     if json_format:
-        formatter = JSONFormatter(LOG_FORMAT, LOG_DATE_FORMAT)
+        formatter: Union[JSONFormatter, PlainFormatter] = JSONFormatter(
+            LOG_FORMAT, LOG_DATE_FORMAT
+        )
     else:
         formatter = PlainFormatter(LOG_FORMAT, LOG_DATE_FORMAT)
 

@@ -1,11 +1,12 @@
 """GPU embedding support for Coarch."""
 
 import numpy as np
+from typing import Any, Dict
 
 
-def check_gpu_availability() -> dict:
+def check_gpu_availability() -> Dict[str, Any]:
     """Check GPU availability and return info."""
-    info = {
+    info: Dict[str, Any] = {
         "cuda_available": False,
         "rocm_available": False,
         "device_count": 0,
@@ -171,7 +172,7 @@ class GPUIndex:
             dim: Embedding dimension
         """
         self.dim = dim
-        self.index = None
+        self.index: Any = None
         self._init_index()
 
     def _init_index(self):

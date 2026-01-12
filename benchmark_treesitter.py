@@ -81,8 +81,8 @@ print(
 print("\n[2/3] Testing Tree-sitter (if available)")
 print("-" * 50)
 
-ts_time = regex_time
-symbols_found = []
+ts_time: float = regex_time
+symbols_found: list = []
 
 try:
     import tree_sitter
@@ -91,7 +91,7 @@ try:
 
     parser = tree_sitter.Parser()
 
-    ts_parse_time = 0
+    ts_parse_time: float = 0
     for _ in range(1000):
         t_start = time.time()
         tree = parser.parse(bytes(SAMPLE_CODE, "utf-8"))

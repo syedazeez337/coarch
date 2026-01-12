@@ -216,7 +216,7 @@ class TreeSitterCAnalyzer:
                 )
 
             parser = self.ts.Parser()
-            parser.set_language(lang)
+            parser.set_language(lang)  # type: ignore[attr-defined]
 
             tree = parser.parse(bytes(code, "utf-8"))
             root_node = tree.root_node
@@ -370,7 +370,7 @@ class TreeSitterCAnalyzer:
                     )
 
                 parser = self.ts.Parser()
-                parser.set_language(lang)
+                parser.set_language(lang)  # type: ignore[attr-defined]
                 tree = parser.parse(bytes(code, "utf-8"))
 
                 symbols = self._extract_symbols_native(tree.root_node, language)
@@ -412,7 +412,7 @@ class TreeSitterCAnalyzer:
         self, symbols: List[TreeSitterSymbol]
     ) -> Dict[str, List[str]]:
         """Group symbols by type."""
-        grouped = {}
+        grouped: Dict[str, List[str]] = {}
         for sym in symbols:
             if sym.type not in grouped:
                 grouped[sym.type] = []
