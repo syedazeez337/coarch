@@ -97,12 +97,12 @@ python_start = time.time()
 temp_dir = tempfile.mkdtemp()
 python_indexer_path = os.path.join(temp_dir, "python.db")
 
-from backend.indexer import RepositoryIndexer
+from backend.hybrid_indexer import HybridIndexer
 from backend.ast_analyzer import TreeSitterAnalyzer
 
 print(f"\n[1/4] Initializing Python indexer...")
 
-python_indexer = RepositoryIndexer(db_path=python_indexer_path)
+python_indexer = HybridIndexer(db_path=python_indexer_path)
 analyzer = TreeSitterAnalyzer()
 
 print(f"\n[2/4] Scanning repository...")

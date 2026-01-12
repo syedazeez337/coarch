@@ -7,7 +7,7 @@ from pathlib import Path
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
-from backend.indexer import RepositoryIndexer
+from backend.hybrid_indexer import HybridIndexer
 from backend.faiss_index import FaissIndex
 from backend.ast_analyzer import TreeSitterAnalyzer
 import tempfile
@@ -33,7 +33,7 @@ INDEX_PATH = os.path.join(temp_dir, "coarch_index")
 DB_PATH = os.path.join(temp_dir, "coarch.db")
 
 print(f"\n[1/4] Initializing Coarch...")
-indexer = RepositoryIndexer(db_path=DB_PATH)
+indexer = HybridIndexer(db_path=DB_PATH)
 faiss = FaissIndex(index_path=INDEX_PATH)
 analyzer = TreeSitterAnalyzer()
 

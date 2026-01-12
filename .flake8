@@ -21,3 +21,4 @@ per-file-ignores =
     benchmark_rust.py: E402,F541,W293,E722
     benchmark_rust_vs_python.py: E402,W293,F541
     live_demo.py: E402,W605,F541,E302,E305,F401
+    backend/hybrid_indexer.py: E501,W291,F841

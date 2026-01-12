@@ -2,7 +2,7 @@
 
 from .faiss_index import FaissIndex, SearchResult
 from .embeddings import CodeEmbedder
-from .indexer import RepositoryIndexer, CodeChunk
+from .hybrid_indexer import HybridIndexer
 from .server import app, run_server
 
 __version__ = "0.1.0"
@@ -10,8 +10,7 @@ __all__ = [
     "FaissIndex",
     "SearchResult",
     "CodeEmbedder",
-    "RepositoryIndexer",
-    "CodeChunk",
+    "HybridIndexer",
     "app",
     "run_server",
 ]

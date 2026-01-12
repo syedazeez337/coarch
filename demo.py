@@ -13,10 +13,10 @@ print("\n[1/4] Creating index and sample data...")
 
 import numpy as np
 import faiss
-from backend.indexer import RepositoryIndexer, CodeChunk
+from backend.hybrid_indexer import HybridIndexer, CodeChunk
 from backend.ast_analyzer import TreeSitterAnalyzer
 
-indexer = RepositoryIndexer(db_path=":memory:")
+indexer = HybridIndexer(db_path=":memory:")
 analyzer = TreeSitterAnalyzer()
 
 sample_chunks = [

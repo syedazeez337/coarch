@@ -93,10 +93,10 @@ def get_components():
     state = app.state
 
     if state.indexer is None:
-        from .indexer import RepositoryIndexer
+        from .hybrid_indexer import HybridIndexer
 
-        state.indexer = RepositoryIndexer()
-        logger.info("Initialized RepositoryIndexer")
+        state.indexer = HybridIndexer()
+        logger.info("Initialized HybridIndexer")
 
     if state.embedder is None:
         from .embeddings import CodeEmbedder

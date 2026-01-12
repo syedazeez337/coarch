@@ -465,10 +465,10 @@ class ParallelIndexer:
 
     def _process_single_file(self, file_path: str) -> List[dict]:
         """Process a single file."""
-        from backend.indexer import RepositoryIndexer
+        from backend.hybrid_indexer import HybridIndexer
         from backend.ast_analyzer import TreeSitterAnalyzer
 
-        indexer = RepositoryIndexer(db_path=":memory:")
+        indexer = HybridIndexer(db_path=":memory:")
         analyzer = TreeSitterAnalyzer()
 
         try:

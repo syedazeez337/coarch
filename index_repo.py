@@ -5,7 +5,7 @@ import os
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
-from backend.indexer import RepositoryIndexer
+from backend.hybrid_indexer import HybridIndexer
 
 print("=" * 60)
 print("Indexing the Coarch repository...")
@@ -14,7 +14,7 @@ print("=" * 60)
 repo_path = os.path.dirname(os.path.abspath(__file__))
 print(f"\nRepository: {repo_path}")
 
-indexer = RepositoryIndexer(db_path="coarch_index.db")
+indexer = HybridIndexer(db_path="coarch_index.db")
 
 print("\nIndexing files...")
 stats = indexer.index_repository(repo_path, "coarch")

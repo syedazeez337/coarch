@@ -30,7 +30,7 @@ except ImportError as e:
     print("  Building: cd rust-indexer && cargo build --release")
 
 # Python indexer
-from backend.indexer import RepositoryIndexer
+from backend.hybrid_indexer import HybridIndexer
 from backend.ast_analyzer import TreeSitterAnalyzer
 
 print(f"\nRepository: {REPO_PATH}")
@@ -83,7 +83,7 @@ print("=" * 70)
 python_start = time.time()
 
 temp_dir = tempfile.mkdtemp()
-python_indexer = RepositoryIndexer(db_path=os.path.join(temp_dir, "python.db"))
+python_indexer = HybridIndexer(db_path=os.path.join(temp_dir, "python.db"))
 analyzer = TreeSitterAnalyzer()
 
 python_stats = python_indexer.index_repository(REPO_PATH, REPO_NAME)

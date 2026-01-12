@@ -57,12 +57,12 @@ def index(path: str, name: str, watch: bool):
     print(f"[green]Indexing repository:[/] {path}")
 
     try:
-        from .indexer import RepositoryIndexer
+        from .hybrid_indexer import HybridIndexer
         from .embeddings import CodeEmbedder
         from .faiss_index import FaissIndex
         from .file_watcher import IncrementalIndexer
 
-        indexer = RepositoryIndexer()
+        indexer = HybridIndexer()
         embedder = CodeEmbedder()
 
         index_path = os.environ.get("COARCH_INDEX_PATH", "coarch_index")
@@ -190,10 +190,10 @@ def status():
     print_header()
 
     try:
-        from .indexer import RepositoryIndexer
+        from .hybrid_indexer import HybridIndexer
         from .faiss_index import FaissIndex
 
-        indexer = RepositoryIndexer()
+        indexer = HybridIndexer()
         stats = indexer.get_stats()
 
         print("[green]Index Statistics:[/]")
@@ -223,9 +223,9 @@ def delete(repo_id: int):
     print(f"[yellow]Deleting repository {repo_id}...[/]")
 
     try:
-        from .indexer import RepositoryIndexer
+        from .hybrid_indexer import HybridIndexer
 
-        indexer = RepositoryIndexer()
+        indexer = HybridIndexer()
         chunks_deleted = indexer.delete_repo(repo_id)
 
         print(f"[green]Deleted {chunks_deleted} chunks.[/]")
