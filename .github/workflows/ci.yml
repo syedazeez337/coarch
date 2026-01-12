@@ -121,7 +121,7 @@ jobs:
         docker run --rm coarch:latest python -m pytest tests/ -v || true
 
     - name: Scan Docker image
-      uses: aquasec/trivy-action@master
+      uses: aquasecurity/trivy-action@master
       with:
         image-ref: 'coarch:latest'
         format: 'table'
