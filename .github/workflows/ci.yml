@@ -103,6 +103,14 @@ jobs:
     steps:
     - uses: actions/checkout@v4
 
+    - name: Clean up disk space
+      run: |
+        df -h
+        docker system df
+        docker builder prune -af
+        docker image prune -af
+        df -h
+
     - name: Set up Docker Buildx
       uses: docker/setup-buildx-action@v3
 
